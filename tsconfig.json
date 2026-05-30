@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "composite": true,
+    "declaration": true,
+    "declarationDir": "./dist/types/main",
+    "emitDeclarationOnly": true,
+    "experimentalDecorators": true,
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "src/*"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "scripts/**/*",
+    "vite.config*.ts",
+    "tests/**/*"
+  ],
+  "exclude": [
+    "src/renderer/**/*",
+    "src/__tests__/renderer/**/*",
+    "node_modules",
+    "dist",
+    "release"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.renderer.json"
+    }
+  ]
+}

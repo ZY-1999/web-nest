@@ -1,0 +1,17 @@
+node_modules/
+dist/
+release/
+.env
+coverage/
+*.log
+.idea/
+test-results/
+playwright-report/
+playwright/.cache/
+.specs/scratchpad/
+*.tsbuildinfo
+native/target/
+native/*.node
+native/index.cjs
+native/index.d.ts
+stats.html

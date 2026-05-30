@@ -1,0 +1,15 @@
+{
+  "name": "native",
+  "version": "0.0.0",
+  "main": "index.cjs",
+  "types": "index.d.ts",
+  "napi": {
+    "binaryName": "native"
+  },
+  "scripts": {
+    "build": "napi build --platform --js index.cjs --dts index.d.ts --release"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.0.0"
+  }
+}
