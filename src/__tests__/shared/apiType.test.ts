@@ -3,6 +3,7 @@ import { serviceRegistry } from '@/shared/serviceRegistry';
 import type { ApiType } from '@/shared/serviceRegistry/apiDefinitions';
 
 abstract class TestApi {
+  static apiName = 'TestApi';
   abstract syncMethod(): string;
   abstract asyncMethod(): Promise<number>;
   abstract syncMethodWithParams(arg: string): boolean;

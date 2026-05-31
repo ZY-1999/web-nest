@@ -81,7 +81,7 @@ export class ServiceMetadataRegistry {
   }
 
   getServiceName(ApiClass: abstract new () => object): string {
-    return ApiClass.name;
+    return (ApiClass as { apiName?: string }).apiName ?? ApiClass.name;
   }
 }
 

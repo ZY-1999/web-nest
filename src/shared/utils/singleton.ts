@@ -10,12 +10,13 @@
 // console.log(service1 === service2) // true
 type ProcessType = 'main' | 'preload' | 'renderer';
 
-type Constructor<T, P> = new (...args: P[]) => T
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Constructor<T = any> = new (...args: any[]) => T;
 
 const singletonInstances = new WeakMap<object, unknown>();
 
-export function Singleton<T, P>(...processTypes: ProcessType[]): (target: Constructor<T, P>) => Constructor<T, P> {
-  return (target: Constructor<T, P>) => {
+export function Singleton(...processTypes: ProcessType[]): <T extends Constructor>(target: T) => T {
+  return <T extends Constructor>(target: T) => {
     const currentProcessType = process.env.PROCESS_TYPE as ProcessType;
     const shouldSingleton = processTypes.length === 0 || processTypes.includes(currentProcessType);
 
@@ -36,6 +37,6 @@ export function Singleton<T, P>(...processTypes: ProcessType[]): (target: Constr
       },
     });
 
-    return wrappedConstructor as Constructor<T, P>;
+    return wrappedConstructor as T;
   };
 }

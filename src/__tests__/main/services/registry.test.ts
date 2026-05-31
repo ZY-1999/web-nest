@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createChannelMock } from '@/__tests__/infrastructure/helpers/channelHelpers';
 
 abstract class TestApi {
+  static apiName = 'TestApi';
   abstract testMethod(): Promise<string>;
   abstract testMethod2(param: string): Promise<number>;
 }

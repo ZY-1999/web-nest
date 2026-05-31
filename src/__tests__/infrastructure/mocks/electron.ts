@@ -52,7 +52,10 @@ export const mockBaseWindow = {
   off: vi.fn(),
   once: vi.fn(),
   removeAllListeners: vi.fn(),
-  contentView: null,
+  contentView: {
+    addChildView: vi.fn(),
+    removeChildView: vi.fn(),
+  },
   setContentView: vi.fn(),
   webContents: null,
   setTitle: vi.fn(),
@@ -178,6 +181,10 @@ export function createMockElectron() {
   return {
     app: mockApp,
     BaseWindow: vi.fn(() => ({ ...mockBaseWindow })),
+    BrowserWindow: vi.fn(() => ({
+      ...mockBaseWindow,
+      webContents: { ...mockWebContents },
+    })),
     webContents: mockWebContents,
     ipcMain: mockIpcMain,
     ipcRenderer: mockIpcRenderer,

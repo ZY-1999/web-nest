@@ -1,7 +1,10 @@
 import { ChannelTimeoutError, type ChannelLike } from '@/shared/channel';
 import { AsyncifyFunctions } from '@/shared/utils/type';
+import { logger } from '@/shared/utils/log';
 import { ServiceTimeoutError } from './error';
 import { serviceMetadataRegistry } from './serviceMetadataRegistry';
+
+const log = logger(__SOURCE_FILE__);
 
 export type ApiType<T> = AsyncifyFunctions<T> & {
   use: (channel: ChannelLike) => ApiType<T>;
@@ -54,6 +57,7 @@ export const apiDefinitions = (() => {
     timeout: number,
   ): Promise<unknown> {
     const channelMethod = `${serviceId}:${method}`;
+    log.debug(`${serviceId}:${method} → remote`);
 
     if ('request' in channelLike && typeof channelLike.request === 'function') {
       try {
@@ -99,6 +103,7 @@ export const apiDefinitions = (() => {
               }
               const method = (impl.instance as Record<string, unknown>)[prop];
               if (typeof method === 'function') {
+                log.debug(`${serviceName}:${prop} (local)`);
                 const timeout = serviceMetadataRegistry.getEffectiveTimeout(
                   ApiClass,
                   prop,

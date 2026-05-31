@@ -3,6 +3,7 @@ import { waitForWindowReady } from './helpers/windowHelpers'
 
 test('app launches, creates main window, and loads React app with resources', async ({
   electronApp,
+  mainProcessLogs,
 }) => {
   const window = await waitForWindowReady(electronApp)
 
@@ -30,4 +31,8 @@ test('app launches, creates main window, and loads React app with resources', as
   })
   expect(loadedResources.hasReactRoot).toBe(true)
   expect(consoleErrors).toEqual([])
+
+  // Verify main process logged window creation
+  const hasMainLog = mainProcessLogs.some((l) => l.includes('Main window created successfully'))
+  expect(hasMainLog).toBe(true)
 })

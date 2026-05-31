@@ -15,6 +15,7 @@ describe('Service Registry Timeout', () => {
   describe('@Timeout class decorator', async () => {
     @Timeout(500)
     abstract class TestTimeoutApi {
+      static apiName = 'TestTimeoutApi';
       abstract fastMethod(): Promise<string>;
       abstract slowMethod(): Promise<string>;
       abstract normalMethod(): Promise<string>;
@@ -65,6 +66,7 @@ describe('Service Registry Timeout', () => {
 
   describe('@MethodTimeout method decorator', async () => {
     class TestTimeoutWithClassApi {
+      static apiName = 'TestTimeoutWithClassApi';
       @MethodTimeout(1000)
       method1(): Promise<string> {
         throw new Error('Not implemented');
@@ -120,6 +122,7 @@ describe('Service Registry Timeout', () => {
   describe('ServiceTimeoutError', async () => {
     @Timeout(500)
     abstract class ErrorApi {
+      static apiName = 'ErrorApi';
       abstract timeoutMethod(): Promise<string>;
     }
     const errorApi = serviceRegistry.defineApi(ErrorApi, 'main');
@@ -198,6 +201,7 @@ describe('Service Registry Timeout', () => {
   describe('timeout priority (method > class > global > built-in)', async () => {
     @Timeout(500)
     abstract class PriorityApi {
+      static apiName = 'PriorityApi';
       @MethodTimeout(1000)
       methodWithTimeout(): Promise<string> {
         throw new Error('Not implemented');
@@ -247,6 +251,7 @@ describe('Service Registry Timeout', () => {
 
     it('should use global timeout when no class or method timeout', async () => {
       abstract class NoTimeoutApi {
+        static apiName = 'NoTimeoutApi';
         abstract slowMethod(): Promise<string>;
       }
 
@@ -276,6 +281,7 @@ describe('Service Registry Timeout', () => {
       // Note: Testing the 10-second built-in default timeout is impractical in unit tests
       // This test verifies the mechanism by using a shorter custom timeout instead
       abstract class CustomDefaultTimeoutApi {
+        static apiName = 'CustomDefaultTimeoutApi';
         abstract slowMethod(): Promise<string>;
       }
 
@@ -306,6 +312,7 @@ describe('Service Registry Timeout', () => {
     it('should race against timeout promise for local calls', async () => {
       @Timeout(100)
       abstract class LocalTimeoutApi {
+        static apiName = 'LocalTimeoutApi';
         abstract fastMethod(): Promise<string>;
         abstract slowMethod(): Promise<string>;
       }
@@ -337,6 +344,7 @@ describe('Service Registry Timeout', () => {
   describe('cross-process timeout passing to channel.request', () => {
     @Timeout(100)
     abstract class CrossProcessApi {
+      static apiName = 'CrossProcessApi';
       abstract remoteMethod(): Promise<string>;
       abstract fastRemoteMethod(): Promise<string>;
     }
@@ -367,6 +375,7 @@ describe('Service Registry Timeout', () => {
       serviceRegistry.setDefaultTimeout(3000);
 
       abstract class DefaultTimeoutApi {
+        static apiName = 'DefaultTimeoutApi';
         abstract method(): Promise<string>;
       }
 
@@ -389,6 +398,7 @@ describe('Service Registry Timeout', () => {
       serviceRegistry.setDefaultTimeout(200);
 
       abstract class Api1 {
+        static apiName = 'Api1';
         abstract method(): Promise<string>;
       }
 
@@ -415,6 +425,7 @@ describe('Service Registry Timeout', () => {
 
       @Timeout(500)
       abstract class OverrideApi {
+        static apiName = 'OverrideApi';
         abstract method(): Promise<string>;
       }
 

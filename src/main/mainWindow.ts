@@ -26,6 +26,7 @@ export async function createMainWindow() {
 
   const windowId = windowManager.createWindow({
     id: 'main',
+    closeAction: 'hide',
     options: {
       width: 1200,
       height: 800,
@@ -55,7 +56,6 @@ export async function createMainWindow() {
     log.info('Window resized - bounds:', bounds, 'contentBounds:', contentBounds);
     view.webContentsView.setBounds({ ...contentBounds, x: 0, y: 0 });
   });
-  view.toggleDevTools();
 
   log.info('Main window created successfully');
 }

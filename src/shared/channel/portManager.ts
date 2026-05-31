@@ -49,9 +49,11 @@ export class PortManager {
     (async () => {
       const { ipcMain, webContents } = await import('electron');
 
-      ipcMain.handle('__channel_request_port__', async (event) => {
+      ipcMain.handle('__channel_request_port__', async (event, requestId?: string) => {
         const webContentsId = event.sender.id;
-        log.debug(`Received port request from webContentsId: ${webContentsId}`);
+        log.debug(
+          `Received port request from webContentsId: ${webContentsId}, requestId: ${requestId}`,
+        );
 
         const entry = this.registry.get(webContentsId);
 
@@ -66,28 +68,35 @@ export class PortManager {
           throw new Error('WebContents not found');
         }
 
-        if (entry.port2 === null) {
-          log.debug(`Creating new MessageChannel for webContentsId: ${webContentsId}`);
-          const { MessageChannelMain } = await import('electron');
-          const { port1, port2 } = new MessageChannelMain();
-
-          this.setupPort1CloseListener(port1, entry);
-
-          port1.start();
-          log.debug(`Port1 started for webContentsId: ${webContentsId}`);
-
-          entry.port1 = port1;
-          entry.onPortReady(port1);
-          entry.port2 = port2;
-        } else {
-          log.debug(`Reusing existing port2 for webContentsId: ${webContentsId}`);
+        // Close existing ports before creating new ones to avoid stale connections
+        if (entry.port1) {
+          log.debug(`Closing stale port1 for webContentsId: ${webContentsId}`);
+          closePort(entry.port1);
+          entry.port1 = null;
         }
+        if (entry.port2) {
+          log.debug(`Closing stale port2 for webContentsId: ${webContentsId}`);
+          closePort(entry.port2);
+          entry.port2 = null;
+        }
+
+        const { MessageChannelMain } = await import('electron');
+        const { port1, port2 } = new MessageChannelMain();
+
+        this.setupPort1CloseListener(port1, entry);
+
+        port1.start();
+        log.debug(`Port1 started for webContentsId: ${webContentsId}`);
+
+        entry.port1 = port1;
+        entry.onPortReady(port1);
+        entry.port2 = port2;
 
         const portToTransfer = entry.port2!;
         entry.port2 = null;
 
-        log.debug(`Transferring port to webContentsId: ${webContentsId}`);
-        wc.postMessage('__channel_port_transfer__', null, [portToTransfer]);
+        log.debug(`Transferring port to webContentsId: ${webContentsId}, requestId: ${requestId}`);
+        wc.postMessage('__channel_port_transfer__', requestId ?? null, [portToTransfer]);
       });
     })();
 
@@ -138,17 +147,24 @@ export class PortManager {
     (async () => {
       const { ipcRenderer } = await import('electron');
 
+      // Use a unique request ID to ensure this IIFE receives the correct paired port
+      const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
       const portPromise = new Promise<PortType>((resolve, reject) => {
         let isResolved = false;
 
-        const handler = (event: Electron.IpcRendererEvent) => {
+        const handler = (event: Electron.IpcRendererEvent, id?: string) => {
+          // Only accept ports matching our request ID (or legacy without ID)
+          if (id !== undefined && id !== requestId) {
+            return;
+          }
           if (isResolved) {
             return;
           }
           isResolved = true;
           
           ipcRenderer.off('__channel_port_transfer__', handler);
-          log.debug('Port received from main process');
+          log.debug(`Port received from main process (requestId: ${requestId})`);
           resolve(event.ports[0]);
         };
 
@@ -166,7 +182,7 @@ export class PortManager {
         }, 5000);
       });
 
-      await ipcRenderer.invoke('__channel_request_port__');
+      await ipcRenderer.invoke('__channel_request_port__', requestId);
       log.debug('Port request sent to main process');
 
       const port = await portPromise;

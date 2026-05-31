@@ -4,7 +4,10 @@ import type { ServiceInfo } from './types';
 import { apiDefinitions } from './apiDefinitions';
 export { ServiceTimeoutError } from './error';
 import { Singleton } from '@/shared/utils/singleton';
+import { logger } from '@/shared/utils/log';
 import { serviceMetadataRegistry } from './serviceMetadataRegistry';
+
+const log = logger(__SOURCE_FILE__);
 
 @Singleton()
 export class ServiceRegistry {
@@ -63,6 +66,7 @@ export class ServiceRegistry {
         instance: new WeakRef(instance),
         processType: serviceInfo.processType,
       });
+      log.debug(`Registered ${serviceInfo.serviceName} (${serviceInfo.processType})`);
 
       const channels = Array.isArray(channelLike) ? channelLike : [channelLike];
       for (const channel of channels) {
@@ -85,6 +89,7 @@ export class ServiceRegistry {
 
       if (typeof serviceMethod === 'function') {
         channelLike.onRequest(channelMethod, (payload: unknown) => {
+          log.debug(`${channelMethod} ← request`);
           return (serviceMethod as (...args: unknown[]) => unknown).apply(
             instance,
             payload as unknown[],
