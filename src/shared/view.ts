@@ -20,6 +20,7 @@ export type ViewOptions = Electron.WebPreferences & {
   channel?: Channel;
   defaultChannelTimeout?: number;
   loadUrlOptions?: Electron.LoadURLOptions;
+  backgroundColor?: string;
 };
 
 export interface ManagedViewEventMap {

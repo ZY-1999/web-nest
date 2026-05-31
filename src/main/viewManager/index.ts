@@ -23,6 +23,7 @@ export class ViewManager extends TypedEmitter<ViewEventMap> implements ChannelCe
       channel,
       defaultChannelTimeout,
       loadUrlOptions = {},
+      backgroundColor,
       ...restOptions
     } = options;
 
@@ -36,6 +37,10 @@ export class ViewManager extends TypedEmitter<ViewEventMap> implements ChannelCe
       channel,
       ...restOptions,
     });
+
+    if (backgroundColor) {
+      view.webContentsView.setBackgroundColor(backgroundColor);
+    }
 
     view.on('state-changed', (state) => {
       this.emit('view-state-changed', viewId, state);

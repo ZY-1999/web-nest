@@ -157,8 +157,8 @@ export function WebCatalog() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-8">
-      <h1 className="mb-8 text-center text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
+    <div className="min-h-screen bg-background p-8">
+      <h1 className="mb-8 text-center text-3xl font-bold text-foreground">
         Web Catalog
       </h1>
 
@@ -167,11 +167,11 @@ export function WebCatalog() {
           <div
             key={app.id}
             data-testid="webapp-card"
-            className="group cursor-pointer rounded-lg border border-white/10 bg-white/5 p-4 backdrop-blur-sm transition-colors hover:bg-white/10"
+            className="group cursor-pointer rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent"
             onClick={() => setEditId(app.id)}
           >
-            <p className="truncate text-white font-medium">{app.title || app.url}</p>
-            <p className="mt-1 truncate text-sm text-white/50">{app.url}</p>
+            <p className="truncate text-foreground font-medium">{app.title || app.url}</p>
+            <p className="mt-1 truncate text-sm text-muted-foreground">{app.url}</p>
             <Button
               onClick={(e) => {
                 e.stopPropagation();
@@ -190,7 +190,7 @@ export function WebCatalog() {
         <button
           onClick={() => setAddOpen(true)}
           data-testid="add-card-btn"
-          className="flex min-h-[120px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-white/20 bg-white/5 text-white/40 transition-colors hover:border-white/40 hover:text-white/60 hover:bg-white/10"
+          className="flex min-h-[120px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground/60 hover:bg-accent"
         >
           <Plus className="h-8 w-8" />
           <span className="mt-1 text-sm">Add</span>
@@ -198,7 +198,7 @@ export function WebCatalog() {
       </div>
 
       {apps.length === 0 && (
-        <p className="mt-8 text-center text-white/30" data-testid="empty-message">
+        <p className="mt-8 text-center text-muted-foreground" data-testid="empty-message">
           No web apps open. Click + to add one.
         </p>
       )}

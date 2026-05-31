@@ -1,5 +1,7 @@
 # electron-template CodeMap (project)
 
+Updated: 2026-06-01 — Theme System 补全首帧防闪烁（离屏渲染 + backgroundColor），与模板完全对齐
+
 ## 1. Orientation
 
 - Project: electron-template
@@ -37,7 +39,7 @@ Node: electron-template
   - `src/preload/index.ts`: preload 入口
   - `src/renderer/main.tsx`: renderer 入口
 - Edges / Children:
-  - `Capability Index`: IPC 通信、服务注册、窗口管理、视图管理、自动更新、系统托盘、日志、Rust native
+  - `Capability Index`: IPC 通信、服务注册、窗口管理、视图管理、自动更新、系统托盘、日志、Rust native、Theme System
   - `Module Index`: src/main, src/preload, src/renderer, src/shared (含 utils), native/
   - `Entry Index`: 三进程入口点
   - `Domain And Data`: 服务定义、窗口/视图状态、序列化
@@ -96,9 +98,26 @@ Node: electron-template
     - Entry: `native/build.rs` → `greet()`
     - Feature CodeMap: pending
     - Status: `confirmed`
+  - `WebApp Service`:
+    - Main modules: `src/shared/services/webAppApi.ts`, `src/main/services/webAppService.ts`, `src/renderer/stores/webAppStore.ts`, `src/renderer/components/WebCatalog/`
+    - Entry: `webAppMainApi.createWebApp()` / `WebAppService.createWebApp()`
+    - Feature CodeMap: pending
+    - Status: `confirmed`
+  - `Service Timeout`:
+    - Main modules: `src/shared/serviceRegistry/decorators.ts`, `src/shared/serviceRegistry/serviceMetadataRegistry.ts`
+    - Entry: `@Timeout(ms)` / `@MethodTimeout(ms)` 装饰器
+    - Feature CodeMap: pending
+    - Status: `confirmed`
   - `Frontend UI`:
     - Main modules: `src/renderer/` (React + Zustand + Tailwind + shadcn/ui)
     - Entry: `src/renderer/main.tsx`
+    - Note: App.tsx 渲染 `<ThemeToggle />` + `<WebCatalog />`
+    - Feature CodeMap: pending
+    - Status: `confirmed`
+  - `Theme System`:
+    - Main modules: `src/shared/theme/`, `src/shared/services/themeApi.ts`, `src/main/services/themeService.ts`, `src/renderer/components/ThemeToggle/`, `src/renderer/styles/index.css`
+    - Entry: `ThemeApi` (IPC) → `ThemeService` (主进程状态) → `applyThemeToRoot()` (CSS 变量)
+    - Note: light/dark 两态，主进程 single source of truth，CSS 变量直接用 hex，renderer 渲染前从 main 拉主题；首帧防闪烁：离屏创建 (x:-10000) + window/view backgroundColor + 50ms 后居中定位
     - Feature CodeMap: pending
     - Status: `confirmed`
 - Evidence: 源码目录结构 + README.md "项目能力" 章节
@@ -144,7 +163,7 @@ Node: electron-template
     - Risk notes: 平台特定二进制，需单独构建
   - `src/__tests__/`:
     - Path: `src/__tests__/`
-    - Responsibility: Vitest 单元测试：三套环境 (main/preload/renderer)、mock 基础设施
+    - Responsibility: Vitest 单元测试：三套环境 (main/preload/renderer)、integration、shared、mock 基础设施
     - Key dependencies: vitest, jsdom, @testing-library/react, msw
     - Risk notes: 无
   - `tests/e2e/`:
@@ -164,11 +183,11 @@ Node: electron-template
 - Purpose: 列出所有运行时入口点
 - Entries:
   - Main process:
-    - `src/main/index.ts` → `app.whenReady()` → createMainWindow + tray + registerServices + initUpdater
+    - `src/main/index.ts` → `app.whenReady()` → createMainWindow + tray + registerServices (含 webAppService) + initUpdater
   - Preload:
     - `src/preload/index.ts` → `channel.init()` + `logManager.initLog()`
   - Renderer:
-    - `src/renderer/main.tsx` → serviceRegistry setup + ReactDOM.render
+    - `src/renderer/main.tsx` → serviceRegistry setup + ReactDOM.render → `App.tsx` → `<WebCatalog />`
   - Vite builds:
     - `vite.config.main.mts` (main process)
     - `vite.config.preload.mts` (preload)
@@ -190,13 +209,16 @@ Node: electron-template
 - Purpose: 核心数据对象和类型
 - Children:
   - Core domain objects:
-    - `CounterMainApi` / `CounterRendererApi` / `UpdaterApi`: 抽象服务 API 类 (`src/shared/services/`)
+    - `UpdaterApi` / `WebAppMainApi`: 抽象服务 API 类 (`src/shared/services/`)
     - `ChannelAPI` / `ChannelLike` / `ChannelCenter`: 通信接口 (`src/shared/channel/types.ts`)
     - `ServiceRegistry`: 服务注册/路由 (`src/shared/serviceRegistry/`)
   - State objects:
     - `WindowState`: `{ id, visible, focused, bounds }` (`src/shared/window.ts`)
     - `ViewState`: `{ id, type, url, bounds, visible, focused, loaded }` (`src/shared/view.ts`)
-    - `CounterState`: `{ count, setCount }` (Zustand store, `src/renderer/stores/counterStore.ts`)
+    - `WebAppState`: `{ id, url, title }` (API 类型, `src/shared/services/webAppApi.ts`)
+    - `WebAppEntry`: `{ id, url, title, webContentsView }` (main 进程内部状态, `src/main/services/webAppService.ts`)
+    - `WebCatalogState`: `{ apps, addApp, removeApp, updateApp }` (Zustand store, `src/renderer/stores/webAppStore.ts`)
+    - `ServiceMetadata`: `{ serviceName, processType, classTimeout, methodTimeouts }` (`src/shared/serviceRegistry/serviceMetadataRegistry.ts`)
   - Message types:
     - `ChannelRequest` / `ChannelResponse` / `ChannelMessage`: IPC 消息 (`src/shared/channel/types.ts`)
   - Config namespaces:
@@ -208,7 +230,7 @@ Node: electron-template
     - `ServiceTimeoutError` (`src/shared/serviceRegistry/error.ts`)
   - Important patterns:
     - `@Singleton()` / `@Singleton('preload', 'renderer')`: 进程感知单例装饰器
-    - `@Timeout(ms)` / `@MethodTimeout(ms)`: 服务超时装饰器
+    - `@Timeout(ms)` / `@MethodTimeout(ms)`: 服务超时装饰器 (priority: method > class > global > built-in 10s)
 - Evidence: 源码类型定义
 - Unknowns: 无
 - Validation: TypeScript 编译 (`pnpm run typecheck`)
@@ -259,19 +281,24 @@ Node: electron-template
     - Drill-Down: `src/shared/channel/portManager.ts` → `src/shared/channel/impl.ts`
   - Flow: Service RPC 调用 (renderer → main)
     - Modules: renderer (proxy) → channel → main (handler)
-    - Entry: `counterMainApi.increment()` → `apiDefinitions.invokeRemote()` → `channel.request("CounterMainApi:increment")` → main handler
+    - Entry: `apiDefinitions.invokeRemote()` → `channel.request("ApiName:method")` → main handler
     - Effect: 跨进程方法调用，带超时和错误序列化
     - Drill-Down: `src/shared/serviceRegistry/apiDefinitions.ts`
-  - Flow: Service RPC 调用 (main → renderer)
-    - Modules: main (counterService) → channel → renderer (counterRendererService)
-    - Entry: `counterRendererApi.use(channel).updateCount()` → channel.request → renderer handler → `useCounterStore.setState`
-    - Effect: main 主动推送状态到 renderer
-    - Drill-Down: `src/main/services/counterService.ts` → `src/renderer/services/counterService.ts`
   - Flow: Window 创建
     - Modules: main/index.ts → windowManager → viewManager → managedWindow + managedView
-    - Entry: `createMainWindow()` → `windowManager.createWindow()` + `viewManager.createView()` + `view.attachTo()`
-    - Effect: 创建 BaseWindow + WebContentsView，绑定 resize 事件
+    - Entry: `createMainWindow()` → `themeService.getTheme()` → `windowManager.createWindow({ backgroundColor })` + `viewManager.createView({ backgroundColor })` + `view.attachTo()`
+    - Effect: 创建 BaseWindow (离屏 x:-10000 + backgroundColor) + WebContentsView (setBackgroundColor)，绑定 resize 事件，50ms 后居中定位
     - Drill-Down: `src/main/mainWindow.ts`
+  - Flow: WebApp 创建与窗口管理
+    - Modules: renderer (WebCatalog) → channel → main (WebAppService) → windowManager
+    - Entry: `webAppMainApi.createWebApp(url)` → `WebAppService.createWebApp()` → `windowManager.createWindow()` + new `WebContentsView`
+    - Effect: 为每个 web app 创建独立 BaseWindow + WebContentsView 子窗口
+    - Drill-Down: `src/main/services/webAppService.ts` → `src/renderer/components/WebCatalog/index.tsx`
+  - Flow: Service Timeout 生效
+    - Modules: decorator → serviceMetadataRegistry → apiDefinitions (Proxy handler)
+    - Entry: `@Timeout(500)` class decorator → `serviceMetadataRegistry.setClassTimeout()` → Proxy handler 中 `getEffectiveTimeout()` → `Promise.race` / `channel.request({ timeout })`
+    - Effect: 同进程 Promise.race，跨进程传递 timeout 到 channel.request
+    - Drill-Down: `src/shared/serviceRegistry/decorators.ts` → `src/shared/serviceRegistry/serviceMetadataRegistry.ts`
 - Evidence: 源码调用链追踪
 - Unknowns: 无
 - Validation: `pnpm run test` (channel.test.ts, registry.test.ts)
@@ -290,16 +317,19 @@ Node: electron-template
     - `pnpm run test:renderer` — renderer 环境测试 (jsdom)
     - `pnpm run test:e2e` — Playwright E2E (需先 build)
   - Test directories:
-    - `src/__tests__/main/` — main 进程测试 (channel, services, viewManager, serialize, nativeExample)
+    - `src/__tests__/main/` — main 进程测试 (channel, services, viewManager, serialize, nativeExample, timeout)
     - `src/__tests__/preload/` — preload 测试
     - `src/__tests__/renderer/` — renderer 测试 (stores, services, components)
-    - `src/__tests__/shared/` — 共享类型测试
+    - `src/__tests__/shared/` — 共享类型测试 (type.test.ts, apiType.test.ts)
+    - `src/__tests__/integration/` — 集成测试 (webAppService.integration.test.ts)
     - `src/__tests__/infrastructure/` — 测试基础设施 (mocks, helpers, setup)
     - `tests/e2e/` — Playwright E2E
   - Smoke paths:
     - `src/__tests__/main/channel.test.ts` — Channel IPC 核心测试
     - `src/__tests__/main/services/registry.test.ts` — Service Registry 测试
-    - `src/__tests__/main/services/counterService.test.ts` — 跨进程服务调用测试
+    - `src/__tests__/main/services/timeout.test.ts` — Timeout 装饰器 + 优先级测试
+    - `src/__tests__/integration/webAppService.integration.test.ts` — WebApp 集成测试
+    - `src/__tests__/shared/apiType.test.ts` — ApiType 类型约束测试
     - `tests/e2e/app.spec.ts` — 端到端应用启动测试
   - Local run: `pnpm run dev` 启动开发环境
   - Known CI checks: lint + typecheck + test + build (见 AGENTS.md `pnpm run check`)
@@ -332,6 +362,10 @@ Node: electron-template
     - Source: `src/main/viewManager/managedView.ts:22` — `channel ?? new Channel()`，视图可能共享或独立 channel
     - Affected capabilities: View Management, IPC 隔离
     - Suggested Feature CodeMap: View channel 隔离模型
+  - Risk: WebAppService 直接操作 contentView
+    - Source: `src/main/services/webAppService.ts:41` — `(nativeWindow.contentView as ...).addChildView()`，绕过 ViewManager 直接管理 WebContentsView
+    - Affected capabilities: WebApp Service, Window Management
+    - Suggested Feature CodeMap: WebApp Service 深度图
 - Unknowns: 无
 - Validation: 现有 channel.test.ts + registry.test.ts 覆盖部分
 - Next Drill-Down: `src/shared/channel/portManager.ts` 为最高风险
@@ -352,6 +386,16 @@ Node: electron-template
     - Likely entry: `defineApi()` → `implementService()` → Proxy handler
     - Likely files: `src/shared/serviceRegistry/*`, `src/shared/services/*`
     - Priority: high
+  - `WebApp Service 深度流`:
+    - Why: 独立窗口管理 + WebContentsView 绕过 ViewManager，含生命周期、事件、状态同步
+    - Likely entry: `webAppMainApi.createWebApp()` → `WebAppService` → `windowManager.createWindow()`
+    - Likely files: `src/main/services/webAppService.ts`, `src/renderer/components/WebCatalog/index.tsx`, `src/renderer/stores/webAppStore.ts`
+    - Priority: high
+  - `Service Timeout 机制`:
+    - Why: @Timeout/@MethodTimeout 装饰器链、优先级策略、同/跨进程生效方式
+    - Likely entry: `@Timeout()` → `serviceMetadataRegistry` → Proxy handler → `getEffectiveTimeout()`
+    - Likely files: `src/shared/serviceRegistry/decorators.ts`, `src/shared/serviceRegistry/serviceMetadataRegistry.ts`, `src/shared/serviceRegistry/apiDefinitions.ts`
+    - Priority: medium
   - `Window/View 管理模型`:
     - Why: 多窗口/视图架构，含生命周期、事件、channel 绑定
     - Likely entry: `createMainWindow()` → WindowManager + ViewManager
@@ -371,13 +415,16 @@ Node: electron-template
 | --- | --- | --- | --- | --- |
 | Channel IPC | `src/shared/channel/` | `Channel.init()` | pending | confirmed |
 | Service Registry | `src/shared/serviceRegistry/`, `src/shared/services/` | `defineApi()` + `implementService()` | pending | confirmed |
+| Service Timeout | `src/shared/serviceRegistry/decorators.ts`, `serviceMetadataRegistry.ts` | `@Timeout()` / `@MethodTimeout()` | pending | confirmed |
 | Window Management | `src/main/windowManager/` | `windowManager.createWindow()` | pending | confirmed |
 | View Management | `src/main/viewManager/` | `viewManager.createView()` | pending | confirmed |
+| WebApp Service | `src/shared/services/webAppApi.ts`, `src/main/services/webAppService.ts` | `webAppMainApi.createWebApp()` | pending | confirmed |
 | Auto Update | `src/main/updater/`, `src/main/services/updaterService.ts` | `initUpdater()` | pending | confirmed |
 | System Tray | `src/main/tray/` | `appTray.create()` | pending | confirmed |
 | Unified Logging | `src/shared/utils/log/` | `logManager.initLog()` | pending | confirmed |
 | Rust Native | `native/`, `src/main/nativeExample.ts` | `greet()` | pending | confirmed |
 | Frontend UI | `src/renderer/` (React + Zustand + Tailwind) | `main.tsx` | pending | confirmed |
+| Theme System | `src/shared/theme/`, `src/main/services/themeService.ts`, `src/renderer/components/ThemeToggle/`, `src/main/mainWindow.ts` | `ThemeApi` (IPC) + `applyThemeToRoot()` + 离屏渲染防闪烁 | pending | confirmed |
 
 ### Module Index Table
 
@@ -389,7 +436,7 @@ Node: electron-template
 | shared | `src/shared/` | 跨进程共享：Channel、Service Registry、API 定义 | (内部) | 核心通信层 |
 | utils | `src/shared/utils/` | Singleton、日志、序列化、TypedEmitter | electron-log | Singleton 进程限制 |
 | native | `native/` | Rust @napi-rs 模块 | napi | 平台特定二进制 |
-| __tests__ | `src/__tests__/` | Vitest 单元测试 | vitest, jsdom, msw | 无 |
+| __tests__ | `src/__tests__/` | Vitest 单元测试 + 集成测试 | vitest, jsdom, msw | 无 |
 | e2e | `tests/e2e/` | Playwright E2E | @playwright/test | 依赖完整构建 |
 
 ### Cross-Module Flow Table
@@ -397,9 +444,10 @@ Node: electron-template
 | Flow | Modules | Entry | Effect | Drill-Down |
 | --- | --- | --- | --- | --- |
 | IPC Channel Init | main → preload → renderer | `Channel.init()` | 建立 MessagePort 双向通道 | `src/shared/channel/portManager.ts` |
-| Service RPC (renderer→main) | renderer proxy → channel → main handler | `counterMainApi.increment()` | 跨进程方法调用 | `src/shared/serviceRegistry/apiDefinitions.ts` |
-| Service RPC (main→renderer) | main → channel → renderer store | `counterRendererApi.updateCount()` | main 推送状态到 renderer | `src/main/services/counterService.ts` |
-| Window Create | main → windowManager → viewManager | `createMainWindow()` | BaseWindow + WebContentsView | `src/main/mainWindow.ts` |
+| Service RPC (renderer→main) | renderer proxy → channel → main handler | `apiDefinitions.invokeRemote()` | 跨进程方法调用 | `src/shared/serviceRegistry/apiDefinitions.ts` |
+| Window Create | main → windowManager → viewManager | `createMainWindow()` | 离屏 BaseWindow + backgroundColor + WebContentsView + 50ms 居中 | `src/main/mainWindow.ts` |
+| WebApp Create | renderer → channel → main → windowManager | `webAppMainApi.createWebApp()` | 独立 BaseWindow + WebContentsView 子窗口 | `src/main/services/webAppService.ts` |
+| Service Timeout | decorator → metadataRegistry → Proxy handler | `@Timeout(500)` | 同进程 Promise.race / 跨进程 timeout 传递 | `src/shared/serviceRegistry/decorators.ts` |
 
 ### Quick File Index
 
@@ -411,11 +459,23 @@ Node: electron-template
 - `src/shared/channel/portManager.ts`: MessagePort 管理 (高风险)
 - `src/shared/serviceRegistry/index.ts`: ServiceRegistry 实现
 - `src/shared/serviceRegistry/apiDefinitions.ts`: Proxy 生成 + 远程调用
-- `src/shared/services/counterApi.ts`: 示例服务 API 定义
+- `src/shared/theme/index.ts`: applyThemeToRoot + themeTokensToCssVars
+- `src/shared/theme/presets.ts`: lightTheme/darkTheme 色板常量
+- `src/shared/services/themeApi.ts`: ThemeApi IPC 接口
+- `src/main/services/themeService.ts`: 主进程主题状态管理
+- `src/renderer/components/ThemeToggle/index.tsx`: 主题切换按钮 (ThemeApi IPC)
+- `src/renderer/styles/index.css`: CSS 变量色板 (Light/Dark) + Tailwind @theme
 - `src/shared/utils/singleton.ts`: Singleton 装饰器
 - `src/shared/utils/serialize/index.ts`: 序列化/反序列化
 - `src/shared/utils/log/index.ts`: 统一日志
-- `src/main/mainWindow.ts`: 主窗口创建
+- `src/main/mainWindow.ts`: 主窗口创建（离屏渲染 + backgroundColor + 居中定位）
+- `src/shared/services/webAppApi.ts`: WebApp API 定义 (WebAppMainApi)
+- `src/main/services/webAppService.ts`: WebApp 主进程服务实现
+- `src/renderer/stores/webAppStore.ts`: WebApp Zustand store
+- `src/renderer/components/WebCatalog/index.tsx`: Web 目录 UI (AddDialog + EditDialog)
+- `src/renderer/components/ui/dialog.tsx`: shadcn Dialog 组件
+- `src/shared/serviceRegistry/decorators.ts`: @Timeout / @MethodTimeout 装饰器
+- `src/shared/serviceRegistry/serviceMetadataRegistry.ts`: 服务元数据注册表
 - `src/main/windowManager/managedWindow.ts`: 窗口生命周期
 - `src/main/viewManager/managedView.ts`: 视图生命周期
 - `vitest.config.mts`: 三环境测试配置
