@@ -1,7 +1,22 @@
+import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
 
 export const paths = {
+  getWebNestBaseDir(): string {
+    return process.env.WEB_NEST_HOME || path.join(app.getPath('home'), '.web-nest');
+  },
+  getConfigDir(): string {
+    const dir = path.join(this.getWebNestBaseDir());
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  },
+  getCacheDir(): string {
+    const dir = path.join(this.getWebNestBaseDir(), '.cache');
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  },
+
   getPreloadPath() {
     return path.join(__dirname, '../preload/index.js');
   },

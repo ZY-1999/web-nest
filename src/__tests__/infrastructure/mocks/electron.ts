@@ -20,6 +20,10 @@ export const mockApp = {
   dispatch: vi.fn(),
 };
 
+export const mockNet = {
+  fetch: vi.fn(() => Promise.resolve({ ok: false, status: 404 })),
+};
+
 export const mockBaseWindow = {
   show: vi.fn(),
   hide: vi.fn(),
@@ -186,6 +190,7 @@ export function createMockElectron() {
       webContents: { ...mockWebContents },
     })),
     webContents: mockWebContents,
+    net: mockNet,
     ipcMain: mockIpcMain,
     ipcRenderer: mockIpcRenderer,
     contextBridge: mockContextBridge,

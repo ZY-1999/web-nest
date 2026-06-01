@@ -1,3 +1,6 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { test as base, _electron as electron, type ElectronApplication } from '@playwright/test'
 
 export const test = base.extend<{
@@ -5,12 +8,20 @@ export const test = base.extend<{
   mainProcessLogs: string[]
 }>({
   electronApp: async ({}, use) => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'web-nest-e2e-'));
+
     const app = await electron.launch({
       args: ['./dist/main/index.js'],
+      env: {
+        ...process.env,
+        WEB_NEST_HOME: tmpDir,
+      },
     })
 
     await use(app)
     await app.close()
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   },
 
   mainProcessLogs: async ({ electronApp }, use, testInfo) => {

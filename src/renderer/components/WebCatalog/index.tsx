@@ -9,7 +9,7 @@ import {
 } from '@/renderer/components/ui/dialog';
 import { useWebAppStore } from '../../stores/webAppStore';
 import { webAppMainApi } from '@/shared/services';
-import { Plus } from 'lucide-react';
+import { Plus, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 
 function AddDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { addApp } = useWebAppStore();
@@ -142,17 +142,117 @@ function EditDialog({
   );
 }
 
+function AppCard({
+  app,
+  onOpen,
+  onEdit,
+  onDelete,
+}: {
+  app: { id: string; url: string; title: string; faviconDataUrl?: string };
+  onOpen: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const cardRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!menuOpen) { return; }
+    const handler = (e: MouseEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [menuOpen]);
+
+  return (
+    <div
+      ref={cardRef}
+      data-testid="webapp-card"
+      className="group relative aspect-square flex flex-col items-center justify-center rounded-lg border border-border bg-card cursor-pointer transition-colors hover:bg-accent"
+      onClick={onOpen}
+    >
+      {/* Favicon: 36x36 white circle, 24x24 image */}
+      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white">
+        {app.faviconDataUrl ? (
+          <img src={app.faviconDataUrl} alt="" className="h-6 w-6 rounded" data-testid="webapp-favicon" />
+        ) : (
+          <span className="h-6 w-6 flex items-center justify-center text-xs font-bold text-gray-500" data-testid="webapp-favicon-fallback">
+            {app.title.charAt(0).toUpperCase()}
+          </span>
+        )}
+      </div>
+
+      {/* Title */}
+      <p className="mt-2 max-w-[80%] truncate text-center text-xs font-medium text-foreground" title={app.title}>
+        {app.title}
+      </p>
+
+      {/* Hover menu trigger */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setMenuOpen(!menuOpen);
+        }}
+        className="absolute top-1 right-1 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent"
+        data-testid="webapp-menu-btn"
+      >
+        <MoreVertical className="h-4 w-4 text-muted-foreground" />
+      </button>
+
+      {/* Dropdown menu */}
+      {menuOpen && (
+        <div
+          className="absolute top-7 right-1 z-10 rounded-md border border-border bg-card shadow-md"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => { setMenuOpen(false); onEdit(); }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
+            data-testid="webapp-edit-btn"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Edit
+          </button>
+          <button
+            onClick={() => { setMenuOpen(false); onDelete(); }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-red-500 hover:bg-accent"
+            data-testid="webapp-delete-btn"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function WebCatalog() {
-  const { apps, removeApp } = useWebAppStore();
+  const { apps, setApps, removeApp } = useWebAppStore();
   const [addOpen, setAddOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
 
-  const handleClose = async (id: string) => {
+  React.useEffect(() => {
+    webAppMainApi.listWebApps().then(setApps);
+  }, []);
+
+  const handleOpen = async (id: string) => {
     try {
-      await webAppMainApi.closeWebApp(id);
+      await webAppMainApi.openWebApp(id);
+    } catch (error) {
+      console.error('Failed to open web app:', error);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await webAppMainApi.deleteWebApp(id);
       removeApp(id);
     } catch (error) {
-      console.error('Failed to close web app:', error);
+      console.error('Failed to delete web app:', error);
     }
   };
 
@@ -162,35 +262,21 @@ export function WebCatalog() {
         Web Catalog
       </h1>
 
-      <div className="mx-auto grid max-w-4xl grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+      <div className="mx-auto grid max-w-4xl grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-4">
         {apps.map((app) => (
-          <div
+          <AppCard
             key={app.id}
-            data-testid="webapp-card"
-            className="group cursor-pointer rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent"
-            onClick={() => setEditId(app.id)}
-          >
-            <p className="truncate text-foreground font-medium">{app.title || app.url}</p>
-            <p className="mt-1 truncate text-sm text-muted-foreground">{app.url}</p>
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleClose(app.id);
-              }}
-              variant="outline"
-              size="sm"
-              className="mt-3"
-              data-testid="webapp-close-btn"
-            >
-              Close
-            </Button>
-          </div>
+            app={app}
+            onOpen={() => handleOpen(app.id)}
+            onEdit={() => setEditId(app.id)}
+            onDelete={() => handleDelete(app.id)}
+          />
         ))}
 
         <button
           onClick={() => setAddOpen(true)}
           data-testid="add-card-btn"
-          className="flex min-h-[120px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground/60 hover:bg-accent"
+          className="aspect-square flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground/60 hover:bg-accent"
         >
           <Plus className="h-8 w-8" />
           <span className="mt-1 text-sm">Add</span>
@@ -199,7 +285,7 @@ export function WebCatalog() {
 
       {apps.length === 0 && (
         <p className="mt-8 text-center text-muted-foreground" data-testid="empty-message">
-          No web apps open. Click + to add one.
+          No web apps. Click + to add one.
         </p>
       )}
 

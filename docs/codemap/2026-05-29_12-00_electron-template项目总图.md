@@ -1,6 +1,6 @@
 # electron-template CodeMap (project)
 
-Updated: 2026-06-01 — Theme System 补全首帧防闪烁（离屏渲染 + backgroundColor），与模板完全对齐
+Updated: 2026-06-01 — 同步模板 preload args + webAppService 重构为 ViewManager 管理
 
 ## 1. Orientation
 
@@ -39,7 +39,7 @@ Node: electron-template
   - `src/preload/index.ts`: preload 入口
   - `src/renderer/main.tsx`: renderer 入口
 - Edges / Children:
-  - `Capability Index`: IPC 通信、服务注册、窗口管理、视图管理、自动更新、系统托盘、日志、Rust native、Theme System
+  - `Capability Index`: IPC 通信、服务注册、窗口管理、视图管理、自动更新、系统托盘、日志、Rust native、Theme System、Preload Args
   - `Module Index`: src/main, src/preload, src/renderer, src/shared (含 utils), native/
   - `Entry Index`: 三进程入口点
   - `Domain And Data`: 服务定义、窗口/视图状态、序列化
@@ -101,6 +101,7 @@ Node: electron-template
   - `WebApp Service`:
     - Main modules: `src/shared/services/webAppApi.ts`, `src/main/services/webAppService.ts`, `src/renderer/stores/webAppStore.ts`, `src/renderer/components/WebCatalog/`
     - Entry: `webAppMainApi.createWebApp()` / `WebAppService.createWebApp()`
+    - Note: 使用 ViewManager + ManagedView 管理 view 生命周期，preload + channelExpose:false 防止外部页面访问 IPC
     - Feature CodeMap: pending
     - Status: `confirmed`
   - `Service Timeout`:
@@ -118,6 +119,12 @@ Node: electron-template
     - Main modules: `src/shared/theme/`, `src/shared/services/themeApi.ts`, `src/main/services/themeService.ts`, `src/renderer/components/ThemeToggle/`, `src/renderer/styles/index.css`
     - Entry: `ThemeApi` (IPC) → `ThemeService` (主进程状态) → `applyThemeToRoot()` (CSS 变量)
     - Note: light/dark 两态，主进程 single source of truth，CSS 变量直接用 hex，renderer 渲染前从 main 拉主题；首帧防闪烁：离屏创建 (x:-10000) + window/view backgroundColor + 50ms 后居中定位
+    - Feature CodeMap: pending
+    - Status: `confirmed`
+  - `Preload Args`:
+    - Main modules: `src/shared/preload/args.ts`
+    - Entry: `buildPreloadArgs()` (main) / `parsePreloadArgs()` (preload)
+    - Note: 通过 `additionalArguments` 从主进程向 preload 传递 channel 初始化参数（timeout、expose），对称 build/parse API
     - Feature CodeMap: pending
     - Status: `confirmed`
 - Evidence: 源码目录结构 + README.md "项目能力" 章节
@@ -138,7 +145,7 @@ Node: electron-template
     - Risk notes: 持有所有 native 资源引用
   - `src/preload/`:
     - Path: `src/preload/`
-    - Responsibility: 初始化 Channel、暴露 API 到 renderer (contextBridge)
+    - Responsibility: 初始化 Channel（含 parsePreloadArgs 解析 additionalArguments）、暴露 API 到 renderer (contextBridge)
     - Key dependencies: electron (contextBridge, ipcRenderer)
     - Risk notes: 安全边界，contextIsolation 启用
   - `src/renderer/`:
@@ -148,7 +155,7 @@ Node: electron-template
     - Risk notes: 无
   - `src/shared/`:
     - Path: `src/shared/`
-    - Responsibility: 跨进程共享代码：Channel IPC、Service Registry、服务 API 定义、类型
+    - Responsibility: 跨进程共享代码：Channel IPC、Service Registry、服务 API 定义、类型、Preload Args
     - Key dependencies: (内部)
     - Risk notes: 核心通信层，变更影响所有进程
   - `src/shared/utils/`:
@@ -156,6 +163,11 @@ Node: electron-template
     - Responsibility: 通用工具：Singleton 装饰器、日志、序列化、TypedEmitter、类型工具
     - Key dependencies: electron-log
     - Risk notes: Singleton 装饰器限制进程类型
+  - `src/shared/preload/`:
+    - Path: `src/shared/preload/`
+    - Responsibility: Preload 参数工具：buildPreloadArgs / parsePreloadArgs 对称 API，PRELOAD_ARGS 常量注册
+    - Key dependencies: (无)
+    - Risk notes: 新增参数只需扩展 PRELOAD_ARGS + PreloadOptions
   - `native/`:
     - Path: `native/`
     - Responsibility: Rust native 模块示例 (@napi-rs)，pnpm workspace 独立包
@@ -185,7 +197,7 @@ Node: electron-template
   - Main process:
     - `src/main/index.ts` → `app.whenReady()` → createMainWindow + tray + registerServices (含 webAppService) + initUpdater
   - Preload:
-    - `src/preload/index.ts` → `channel.init()` + `logManager.initLog()`
+    - `src/preload/index.ts` → `parsePreloadArgs(process.argv)` → `channel.init({ defaultTimeout, expose })` + `logManager.initLog()`
   - Renderer:
     - `src/renderer/main.tsx` → serviceRegistry setup + ReactDOM.render → `App.tsx` → `<WebCatalog />`
   - Vite builds:
@@ -198,7 +210,7 @@ Node: electron-template
   - Native module:
     - `native/build.rs` → Cargo cdylib → .node binary
 - Evidence: package.json scripts + 源码入口文件
-- Unknowns: 无
+- Unknowns: 無
 - Validation: `pnpm run dev` / `pnpm run build` 验证构建
 - Next Drill-Down: `src/main/index.ts` 为主线
 
@@ -215,10 +227,13 @@ Node: electron-template
   - State objects:
     - `WindowState`: `{ id, visible, focused, bounds }` (`src/shared/window.ts`)
     - `ViewState`: `{ id, type, url, bounds, visible, focused, loaded }` (`src/shared/view.ts`)
-    - `WebAppState`: `{ id, url, title }` (API 类型, `src/shared/services/webAppApi.ts`)
-    - `WebAppEntry`: `{ id, url, title, webContentsView }` (main 进程内部状态, `src/main/services/webAppService.ts`)
+    - `WebAppState`: `{ id, url, title, faviconUrl, faviconDataUrl }` (API 类型, `src/shared/services/webAppApi.ts`)
+    - `WebAppEntry`: `{ appId, windowId, viewId, url, title, faviconUrl }` (main 进程内部状态, `src/main/services/webAppService.ts`)
     - `WebCatalogState`: `{ apps, addApp, removeApp, updateApp }` (Zustand store, `src/renderer/stores/webAppStore.ts`)
     - `ServiceMetadata`: `{ serviceName, processType, classTimeout, methodTimeouts }` (`src/shared/serviceRegistry/serviceMetadataRegistry.ts`)
+  - Config objects:
+    - `PreloadOptions`: `{ channelTimeout?, channelExpose? }` (`src/shared/preload/args.ts`)
+    - `PRELOAD_ARGS`: `{ CHANNEL_TIMEOUT, CHANNEL_EXPOSE }` (常量注册, `src/shared/preload/args.ts`)
   - Message types:
     - `ChannelRequest` / `ChannelResponse` / `ChannelMessage`: IPC 消息 (`src/shared/channel/types.ts`)
   - Config namespaces:
@@ -231,6 +246,7 @@ Node: electron-template
   - Important patterns:
     - `@Singleton()` / `@Singleton('preload', 'renderer')`: 进程感知单例装饰器
     - `@Timeout(ms)` / `@MethodTimeout(ms)`: 服务超时装饰器 (priority: method > class > global > built-in 10s)
+    - `buildPreloadArgs()` / `parsePreloadArgs()`: 对称 API，主进程构建 additionalArguments，preload 解析
 - Evidence: 源码类型定义
 - Unknowns: 无
 - Validation: TypeScript 编译 (`pnpm run typecheck`)
@@ -276,9 +292,9 @@ Node: electron-template
 - Major flows:
   - Flow: IPC Channel 初始化
     - Modules: main → preload → renderer
-    - Entry: `viewManager.createView()` → `Channel.init()` (main) → preload `channel.init()` → `contextBridge.exposeInMainWorld` → renderer 通过 `window.__app_channel__` 接收
-    - Effect: 建立 MessagePort 双向通道
-    - Drill-Down: `src/shared/channel/portManager.ts` → `src/shared/channel/impl.ts`
+    - Entry: `viewManager.createView()` → `Channel.init()` (main) → preload `parsePreloadArgs()` → `channel.init({ expose })` → `contextBridge.exposeInMainWorld` (条件) → renderer 通过 `window.__app_channel__` 接收
+    - Effect: 建立 MessagePort 双向通道，preload args 控制 timeout 和 expose 行为
+    - Drill-Down: `src/shared/channel/portManager.ts` → `src/shared/channel/impl.ts` → `src/shared/preload/args.ts`
   - Flow: Service RPC 调用 (renderer → main)
     - Modules: renderer (proxy) → channel → main (handler)
     - Entry: `apiDefinitions.invokeRemote()` → `channel.request("ApiName:method")` → main handler
@@ -290,9 +306,9 @@ Node: electron-template
     - Effect: 创建 BaseWindow (离屏 x:-10000 + backgroundColor) + WebContentsView (setBackgroundColor)，绑定 resize 事件，50ms 后居中定位
     - Drill-Down: `src/main/mainWindow.ts`
   - Flow: WebApp 创建与窗口管理
-    - Modules: renderer (WebCatalog) → channel → main (WebAppService) → windowManager
-    - Entry: `webAppMainApi.createWebApp(url)` → `WebAppService.createWebApp()` → `windowManager.createWindow()` + new `WebContentsView`
-    - Effect: 为每个 web app 创建独立 BaseWindow + WebContentsView 子窗口
+    - Modules: renderer (WebCatalog) → channel → main (WebAppService) → viewManager + windowManager
+    - Entry: `webAppMainApi.createWebApp(url)` → `WebAppService.createWebApp()` → `viewManager.createView({ preload, additionalArguments: buildPreloadArgs({ channelExpose: false }) })` + `view.attachTo(win)`
+    - Effect: 为每个 web app 创建独立 BaseWindow + ManagedView，preload 运行但 channel 不暴露给外部页面
     - Drill-Down: `src/main/services/webAppService.ts` → `src/renderer/components/WebCatalog/index.tsx`
   - Flow: Service Timeout 生效
     - Modules: decorator → serviceMetadataRegistry → apiDefinitions (Proxy handler)
@@ -311,7 +327,7 @@ Node: electron-template
 - Purpose: 测试和验证入口
 - Validation Entry:
   - Test commands:
-    - `pnpm run test` — Vitest 全量单元测试
+    - `pnpm run test` — Vitest 全量单元测试 (139 tests)
     - `pnpm run test:main` — main 环境测试 (node)
     - `pnpm run test:preload` — preload 环境测试 (jsdom)
     - `pnpm run test:renderer` — renderer 环境测试 (jsdom)
@@ -320,7 +336,7 @@ Node: electron-template
     - `src/__tests__/main/` — main 进程测试 (channel, services, viewManager, serialize, nativeExample, timeout)
     - `src/__tests__/preload/` — preload 测试
     - `src/__tests__/renderer/` — renderer 测试 (stores, services, components)
-    - `src/__tests__/shared/` — 共享类型测试 (type.test.ts, apiType.test.ts)
+    - `src/__tests__/shared/` — 共享类型测试 (type.test.ts, apiType.test.ts, channelArgs.test.ts)
     - `src/__tests__/integration/` — 集成测试 (webAppService.integration.test.ts)
     - `src/__tests__/infrastructure/` — 测试基础设施 (mocks, helpers, setup)
     - `tests/e2e/` — Playwright E2E
@@ -328,13 +344,14 @@ Node: electron-template
     - `src/__tests__/main/channel.test.ts` — Channel IPC 核心测试
     - `src/__tests__/main/services/registry.test.ts` — Service Registry 测试
     - `src/__tests__/main/services/timeout.test.ts` — Timeout 装饰器 + 优先级测试
+    - `src/__tests__/shared/channelArgs.test.ts` — Preload Args build/parse + round-trip (13 tests)
     - `src/__tests__/integration/webAppService.integration.test.ts` — WebApp 集成测试
     - `src/__tests__/shared/apiType.test.ts` — ApiType 类型约束测试
     - `tests/e2e/app.spec.ts` — 端到端应用启动测试
   - Local run: `pnpm run dev` 启动开发环境
   - Known CI checks: lint + typecheck + test + build (见 AGENTS.md `pnpm run check`)
 - Edges / Children:
-  - proves: Channel IPC 消息收发、Service 注册和路由、窗口/视图管理、序列化/反序列化
+  - proves: Channel IPC 消息收发、Service 注册和路由、窗口/视图管理、序列化/反序列化、Preload Args 对称 API
   - does not prove: 自动更新实际流程、Rust native 模块完整功能、多窗口交互
 - Evidence: vitest.config.mts + tests/ 目录 + package.json scripts
 - Unknowns: CI 具体配置 (.github/)
@@ -362,10 +379,6 @@ Node: electron-template
     - Source: `src/main/viewManager/managedView.ts:22` — `channel ?? new Channel()`，视图可能共享或独立 channel
     - Affected capabilities: View Management, IPC 隔离
     - Suggested Feature CodeMap: View channel 隔离模型
-  - Risk: WebAppService 直接操作 contentView
-    - Source: `src/main/services/webAppService.ts:41` — `(nativeWindow.contentView as ...).addChildView()`，绕过 ViewManager 直接管理 WebContentsView
-    - Affected capabilities: WebApp Service, Window Management
-    - Suggested Feature CodeMap: WebApp Service 深度图
 - Unknowns: 无
 - Validation: 现有 channel.test.ts + registry.test.ts 覆盖部分
 - Next Drill-Down: `src/shared/channel/portManager.ts` 为最高风险
@@ -387,8 +400,8 @@ Node: electron-template
     - Likely files: `src/shared/serviceRegistry/*`, `src/shared/services/*`
     - Priority: high
   - `WebApp Service 深度流`:
-    - Why: 独立窗口管理 + WebContentsView 绕过 ViewManager，含生命周期、事件、状态同步
-    - Likely entry: `webAppMainApi.createWebApp()` → `WebAppService` → `windowManager.createWindow()`
+    - Why: 独立窗口管理，现已通过 ViewManager + ManagedView 管理 view 生命周期
+    - Likely entry: `webAppMainApi.createWebApp()` → `WebAppService` → `viewManager.createView()` + `view.attachTo()`
     - Likely files: `src/main/services/webAppService.ts`, `src/renderer/components/WebCatalog/index.tsx`, `src/renderer/stores/webAppStore.ts`
     - Priority: high
   - `Service Timeout 机制`:
@@ -425,15 +438,17 @@ Node: electron-template
 | Rust Native | `native/`, `src/main/nativeExample.ts` | `greet()` | pending | confirmed |
 | Frontend UI | `src/renderer/` (React + Zustand + Tailwind) | `main.tsx` | pending | confirmed |
 | Theme System | `src/shared/theme/`, `src/main/services/themeService.ts`, `src/renderer/components/ThemeToggle/`, `src/main/mainWindow.ts` | `ThemeApi` (IPC) + `applyThemeToRoot()` + 离屏渲染防闪烁 | pending | confirmed |
+| Preload Args | `src/shared/preload/args.ts` | `buildPreloadArgs()` / `parsePreloadArgs()` | pending | confirmed |
 
 ### Module Index Table
 
 | Module / Package | Path | Responsibility | Key Dependencies | Risk Notes |
 | --- | --- | --- | --- | --- |
 | main | `src/main/` | 主进程入口、窗口/视图管理、服务实现 | electron, electron-updater, native | 持有 native 资源引用 |
-| preload | `src/preload/` | Channel 初始化、contextBridge | electron (contextBridge) | 安全边界 |
+| preload | `src/preload/` | Channel 初始化（含 parsePreloadArgs）、contextBridge | electron (contextBridge) | 安全边界 |
 | renderer | `src/renderer/` | React UI、Zustand 状态、renderer 服务 | react, zustand, tailwind | 无 |
 | shared | `src/shared/` | 跨进程共享：Channel、Service Registry、API 定义 | (内部) | 核心通信层 |
+| shared/preload | `src/shared/preload/` | Preload 参数工具：build/parse 对称 API | (无) | 新增参数扩展 PRELOAD_ARGS |
 | utils | `src/shared/utils/` | Singleton、日志、序列化、TypedEmitter | electron-log | Singleton 进程限制 |
 | native | `native/` | Rust @napi-rs 模块 | napi | 平台特定二进制 |
 | __tests__ | `src/__tests__/` | Vitest 单元测试 + 集成测试 | vitest, jsdom, msw | 无 |
@@ -443,20 +458,21 @@ Node: electron-template
 
 | Flow | Modules | Entry | Effect | Drill-Down |
 | --- | --- | --- | --- | --- |
-| IPC Channel Init | main → preload → renderer | `Channel.init()` | 建立 MessagePort 双向通道 | `src/shared/channel/portManager.ts` |
+| IPC Channel Init | main → preload → renderer | `Channel.init()` + `parsePreloadArgs()` | 建立 MessagePort 双向通道，preload args 控制 timeout/expose | `src/shared/channel/portManager.ts` |
 | Service RPC (renderer→main) | renderer proxy → channel → main handler | `apiDefinitions.invokeRemote()` | 跨进程方法调用 | `src/shared/serviceRegistry/apiDefinitions.ts` |
 | Window Create | main → windowManager → viewManager | `createMainWindow()` | 离屏 BaseWindow + backgroundColor + WebContentsView + 50ms 居中 | `src/main/mainWindow.ts` |
-| WebApp Create | renderer → channel → main → windowManager | `webAppMainApi.createWebApp()` | 独立 BaseWindow + WebContentsView 子窗口 | `src/main/services/webAppService.ts` |
+| WebApp Create | renderer → channel → main → viewManager | `webAppMainApi.createWebApp()` | 独立 BaseWindow + ManagedView (preload + channelExpose:false) | `src/main/services/webAppService.ts` |
 | Service Timeout | decorator → metadataRegistry → Proxy handler | `@Timeout(500)` | 同进程 Promise.race / 跨进程 timeout 传递 | `src/shared/serviceRegistry/decorators.ts` |
 
 ### Quick File Index
 
 - `src/main/index.ts`: 主进程入口
-- `src/preload/index.ts`: preload 入口
+- `src/preload/index.ts`: preload 入口（parsePreloadArgs → channel.init）
 - `src/renderer/main.tsx`: renderer 入口
 - `src/shared/channel/index.ts`: Channel 核心实现
 - `src/shared/channel/impl.ts`: ChannelApiImpl 消息收发
 - `src/shared/channel/portManager.ts`: MessagePort 管理 (高风险)
+- `src/shared/preload/args.ts`: Preload 参数 build/parse 对称 API + PRELOAD_ARGS 常量
 - `src/shared/serviceRegistry/index.ts`: ServiceRegistry 实现
 - `src/shared/serviceRegistry/apiDefinitions.ts`: Proxy 生成 + 远程调用
 - `src/shared/theme/index.ts`: applyThemeToRoot + themeTokensToCssVars
@@ -470,7 +486,7 @@ Node: electron-template
 - `src/shared/utils/log/index.ts`: 统一日志
 - `src/main/mainWindow.ts`: 主窗口创建（离屏渲染 + backgroundColor + 居中定位）
 - `src/shared/services/webAppApi.ts`: WebApp API 定义 (WebAppMainApi)
-- `src/main/services/webAppService.ts`: WebApp 主进程服务实现
+- `src/main/services/webAppService.ts`: WebApp 主进程服务实现（ViewManager 管理 view）
 - `src/renderer/stores/webAppStore.ts`: WebApp Zustand store
 - `src/renderer/components/WebCatalog/index.tsx`: Web 目录 UI (AddDialog + EditDialog)
 - `src/renderer/components/ui/dialog.tsx`: shadcn Dialog 组件
