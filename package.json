@@ -1,10 +1,10 @@
 {
-  "name": "electron-template",
+  "name": "web-nest",
   "version": "1.0.0",
-  "description": "Electron + React + TypeScript desktop application",
-  "author": "",
+  "description": "Web 应用启动器",
+  "author": "zhang.ying",
   "license": "MIT",
-  "repository": "",
+  "repository": "https://github.com/ZY-1999/web-nest",
   "main": "dist/main/index.js",
   "packageManager": "pnpm@9.0.0",
   "scripts": {

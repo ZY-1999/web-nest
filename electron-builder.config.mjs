@@ -1,6 +1,6 @@
 export default {
-  appId: 'com.example.electron',
-  productName: 'electron-template',
+  appId: 'com.rika1999.webnest',
+  productName: 'web-nest',
   directories: {
     output: 'release',
     buildResources: 'build',
