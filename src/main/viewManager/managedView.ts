@@ -85,7 +85,7 @@ export class ManagedView extends TypedEmitter<ManagedViewEventMap> implements IM
   }
 
   detach(): void {
-    if (!this.hostWindow) return;
+    if (!this.hostWindow) { return; }
     try {
       if (!this.hostWindow.isDestroyed()) {
         (this.hostWindow.contentView as { removeChildView?: (v: unknown) => void })

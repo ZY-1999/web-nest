@@ -11,6 +11,29 @@ import { themeService } from './services/themeService';
 
 const log = logger(__SOURCE_FILE__);
 
+/** Title bar height — shared constant for main process and renderer overlay alignment. */
+export const TITLE_BAR_HEIGHT = 35;
+
+/** Platform-specific titleBarStyle options for BaseWindow. */
+function getTitleBarOptions(): Electron.BaseWindowConstructorOptions {
+  if (process.platform === 'darwin') {
+    return {
+      titleBarStyle: 'hidden',
+      trafficLightPosition: { x: 14, y: 12 },
+    };
+  }
+
+  // Windows & Linux
+  return {
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      height: TITLE_BAR_HEIGHT,
+      color: '#00000000',
+      symbolColor: '#666666',
+    },
+  };
+}
+
 export async function createMainWindow() {
   log.info('Creating main window, env:', isDev() ? 'development' : 'production');
   const existing = windowManager.getWindow('main');
@@ -37,6 +60,7 @@ export async function createMainWindow() {
       height: 800,
       icon: join(iconPath, 'app', iconFile),
       backgroundColor: tokens.bg,
+      ...getTitleBarOptions(),
     },
   });
 
@@ -57,6 +81,11 @@ export async function createMainWindow() {
 
   const view = viewManager.getView(viewId)!;
   view.attachTo(win, { ...win.getContentBounds(), x: 0, y: 0 });
+
+  // Open DevTools in development mode
+  if (isDev()) {
+    view.webContents.openDevTools({ mode: 'detach' });
+  }
 
   const mainWin = windowManager.getWindow('main')!;
   mainWin.on('resized', (bounds, contentBounds) => {

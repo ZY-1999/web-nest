@@ -41,6 +41,13 @@
     --destructive-foreground: #ffffff;
     --ring: #2563eb;
     --radius: 0.5rem;
+
+    /* Titlebar layout */
+    --titlebar-height: 35px;
+    --titlebar-bg: var(--surface);
+    --titlebar-border: var(--border);
+    --mac-traffic-light-width: 80px;
+    --window-controls-width: 138px;
   }
 }
 
@@ -52,4 +59,58 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* ─── Titlebar ──────────────────────────────────────────────────────────── */
+
+.app-titlebar {
+  display: flex;
+  align-items: center;
+  height: var(--titlebar-height);
+  background: var(--titlebar-bg);
+  border-bottom: 1px solid var(--titlebar-border);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.app-titlebar button,
+.app-titlebar input,
+.app-titlebar select,
+.app-titlebar textarea,
+.app-titlebar a {
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-left {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.titlebar-center {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.titlebar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+/* macOS: reserve space for traffic lights on the left */
+body.platform-darwin .titlebar-left {
+  width: var(--mac-traffic-light-width);
+}
+
+/* Windows / Linux: reserve space for window controls on the right */
+body.platform-win32 .titlebar-right,
+body.platform-linux .titlebar-right {
+  padding-right: var(--window-controls-width);
 }

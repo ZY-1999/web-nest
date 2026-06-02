@@ -71,11 +71,11 @@ export class WebAppService extends WebAppMainApi {
 
   /** Check if an entry's view and window are both alive. */
   private isEntryAlive(entry: WebAppEntry): boolean {
-    if (entry.isClosing) return false;
+    if (entry.isClosing) { return false; }
 
     const nativeWin = windowManager.getNativeWindow(entry.windowId);
     const winAlive = WebAppService.isNativeAlive(() => !!nativeWin && !nativeWin.isDestroyed());
-    if (!winAlive) return false;
+    if (!winAlive) { return false; }
 
     const view = viewManager.getView(entry.viewId);
     return WebAppService.isNativeAlive(() => !!view && !view.webContents.isDestroyed());
@@ -157,7 +157,7 @@ export class WebAppService extends WebAppMainApi {
 
   async closeWebApp(id: string): Promise<void> {
     const entry = this.apps.get(id);
-    if (!entry) return;
+    if (!entry) { return; }
 
     this.destroyEntry(entry);
     log.info('Web app closed:', id);

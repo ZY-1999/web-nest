@@ -1,6 +1,6 @@
 # electron-template CodeMap (project)
 
-Updated: 2026-06-01 — 销毁逻辑安全加固（map 先 delete + try-catch + isClosing + view/window 双存活检查）
+Updated: 2026-06-02 — 标题栏系统（titleBarStyle 平台适配 + renderer TitleBar + ThemeToggle 重构 + CSP 加强）
 
 ## 1. Orientation
 
@@ -10,7 +10,7 @@ Updated: 2026-06-01 — 销毁逻辑安全加固（map 先 delete + try-catch + 
 - Runtime / deployment shape: 桌面应用 (electron-builder 打包，Windows NSIS)
 - Primary entry types: Electron main process → preload → renderer 三进程架构
 - Confidence:
-  - confirmed: 三进程架构、Channel IPC 通信、Service Registry 服务注册、窗口/视图管理、日志系统、构建/测试体系
+  - confirmed: 三进程架构、Channel IPC 通信、Service Registry 服务注册、窗口/视图管理、日志系统、构建/测试体系、标题栏系统
   - inferred: CI pipeline 细节 (.github/)、ViewManager 离屏模式实际使用场景
   - unknown: 生产部署配置、auto-update 实际更新服务器
 
@@ -39,7 +39,7 @@ Node: electron-template
   - `src/preload/index.ts`: preload 入口
   - `src/renderer/main.tsx`: renderer 入口
 - Edges / Children:
-  - `Capability Index`: IPC 通信、服务注册、窗口管理、视图管理、自动更新、系统托盘、日志、Rust native、Theme System、Preload Args
+  - `Capability Index`: IPC 通信、服务注册、窗口管理、视图管理、自动更新、系统托盘、日志、Rust native、Theme System、Preload Args、Titlebar System
   - `Module Index`: src/main, src/preload, src/renderer, src/shared (含 utils), native/
   - `Entry Index`: 三进程入口点
   - `Domain And Data`: 服务定义、窗口/视图状态、序列化
@@ -112,7 +112,7 @@ Node: electron-template
   - `Frontend UI`:
     - Main modules: `src/renderer/` (React + Zustand + Tailwind + shadcn/ui)
     - Entry: `src/renderer/main.tsx`
-    - Note: App.tsx 渲染 `<ThemeToggle />` + `<WebCatalog />`
+    - Note: App.tsx flex 纵向布局（TitleBar 固定顶部 + WebCatalog flex-1 填充剩余空间），ThemeToggle 嵌入 TitleBar
     - Feature CodeMap: pending
     - Status: `confirmed`
   - `Theme System`:
@@ -125,6 +125,12 @@ Node: electron-template
     - Main modules: `src/shared/preload/args.ts`
     - Entry: `buildPreloadArgs()` (main) / `parsePreloadArgs()` (preload)
     - Note: 通过 `additionalArguments` 从主进程向 preload 传递 channel 初始化参数（timeout、expose），对称 build/parse API
+    - Feature CodeMap: pending
+    - Status: `confirmed`
+  - `Titlebar System`:
+    - Main modules: `src/main/mainWindow.ts`, `src/renderer/components/TitleBar/`, `src/renderer/styles/index.css`
+    - Entry: `getTitleBarOptions()` (main) + `<TitleBar />` (renderer)
+    - Note: BaseWindow `titleBarStyle: 'hidden'`，macOS 保留 traffic lights（trafficLightPosition），Windows/Linux 用 titleBarOverlay（透明背景）。renderer TitleBar 35px drag region，平台预留安全区。preload 通过 contextBridge 暴露 platform 给 renderer。CSP: img-src 支持 data: blob:
     - Feature CodeMap: pending
     - Status: `confirmed`
 - Evidence: 源码目录结构 + README.md "项目能力" 章节
@@ -145,12 +151,12 @@ Node: electron-template
     - Risk notes: 持有所有 native 资源引用
   - `src/preload/`:
     - Path: `src/preload/`
-    - Responsibility: 初始化 Channel（含 parsePreloadArgs 解析 additionalArguments）、暴露 API 到 renderer (contextBridge)
+    - Responsibility: 初始化 Channel（含 parsePreloadArgs 解析 additionalArguments）、contextBridge 暴露 electronEnv（platform）+ 条件性 channel API
     - Key dependencies: electron (contextBridge, ipcRenderer)
     - Risk notes: 安全边界，contextIsolation 启用
   - `src/renderer/`:
     - Path: `src/renderer/`
-    - Responsibility: React UI 层：组件、状态(Zustand)、renderer 侧服务实现
+    - Responsibility: React UI 层：组件（TitleBar + WebCatalog + ThemeToggle）、状态(Zustand)、renderer 侧服务实现
     - Key dependencies: react, react-dom, zustand, tailwindcss, lucide-react
     - Risk notes: 无
   - `src/shared/`:
@@ -197,9 +203,9 @@ Node: electron-template
   - Main process:
     - `src/main/index.ts` → `app.whenReady()` → createMainWindow + tray + registerServices (含 webAppService) + initUpdater
   - Preload:
-    - `src/preload/index.ts` → `parsePreloadArgs(process.argv)` → `channel.init({ defaultTimeout, expose })` + `logManager.initLog()`
+    - `src/preload/index.ts` → `contextBridge.exposeInMainWorld('electronEnv', { platform })` → `parsePreloadArgs(process.argv)` → `channel.init({ defaultTimeout, expose })` + `logManager.initLog()`
   - Renderer:
-    - `src/renderer/main.tsx` → serviceRegistry setup + ReactDOM.render → `App.tsx` → `<WebCatalog />`
+    - `src/renderer/main.tsx` → serviceRegistry setup + `applyThemeToRoot()` + `document.body.classList.add('platform-${platform}')` + ReactDOM.render → `App.tsx` → `<TitleBar />` + `<WebCatalog />`
   - Vite builds:
     - `vite.config.main.mts` (main process)
     - `vite.config.preload.mts` (preload)
@@ -234,6 +240,8 @@ Node: electron-template
   - Config objects:
     - `PreloadOptions`: `{ channelTimeout?, channelExpose? }` (`src/shared/preload/args.ts`)
     - `PRELOAD_ARGS`: `{ CHANNEL_TIMEOUT, CHANNEL_EXPOSE }` (常量注册, `src/shared/preload/args.ts`)
+  - Environment objects:
+    - `ElectronEnv`: `{ platform: NodeJS.Platform }` (`src/global.d.ts`) — preload 通过 contextBridge 暴露给 renderer
   - Message types:
     - `ChannelRequest` / `ChannelResponse` / `ChannelMessage`: IPC 消息 (`src/shared/channel/types.ts`)
   - Config namespaces:
@@ -302,8 +310,9 @@ Node: electron-template
     - Drill-Down: `src/shared/serviceRegistry/apiDefinitions.ts`
   - Flow: Window 创建
     - Modules: main/index.ts → windowManager → viewManager → managedWindow + managedView
-    - Entry: `createMainWindow()` → `themeService.getTheme()` → `windowManager.createWindow({ backgroundColor })` + `viewManager.createView({ backgroundColor })` + `view.attachTo()`
-    - Effect: 创建 BaseWindow (离屏 x:-10000 + backgroundColor) + WebContentsView (setBackgroundColor)，绑定 resize 事件，50ms 后居中定位
+    - Entry: `createMainWindow()` → `themeService.getTheme()` → `windowManager.createWindow({ backgroundColor, ...getTitleBarOptions() })` + `viewManager.createView({ backgroundColor })` + `view.attachTo()` + (dev) `view.webContents.openDevTools()`
+    - Effect: 创建 BaseWindow (离屏 x:-10000 + backgroundColor + titleBarStyle 平台适配) + WebContentsView (setBackgroundColor)，绑定 resize 事件，50ms 后居中定位
+    - Note: macOS 用 `titleBarStyle: 'hidden'` + trafficLightPosition；Windows/Linux 用 titleBarOverlay（透明背景），TITLE_BAR_HEIGHT=35 常量统一高度
     - Drill-Down: `src/main/mainWindow.ts`
   - Flow: WebApp 创建与窗口管理
     - Modules: renderer (WebCatalog) → channel → main (WebAppService) → viewManager + windowManager
@@ -316,6 +325,11 @@ Node: electron-template
     - Entry: `@Timeout(500)` class decorator → `serviceMetadataRegistry.setClassTimeout()` → Proxy handler 中 `getEffectiveTimeout()` → `Promise.race` / `channel.request({ timeout })`
     - Effect: 同进程 Promise.race，跨进程传递 timeout 到 channel.request
     - Drill-Down: `src/shared/serviceRegistry/decorators.ts` → `src/shared/serviceRegistry/serviceMetadataRegistry.ts`
+  - Flow: 平台感知标题栏
+    - Modules: preload → renderer (main.tsx → App.tsx → TitleBar)
+    - Entry: `contextBridge.exposeInMainWorld('electronEnv', { platform })` → `document.body.classList.add('platform-${platform}')` → TitleBar 根据 CSS class 预留安全区
+    - Effect: macOS 左侧预留 traffic lights (80px)，Windows/Linux 右侧预留窗口控制 (138px)
+    - Drill-Down: `src/renderer/components/TitleBar/index.tsx` → `src/renderer/styles/index.css`
 - Evidence: 源码调用链追踪
 - Unknowns: 无
 - Validation: `pnpm run test` (channel.test.ts, registry.test.ts)
@@ -384,6 +398,10 @@ Node: electron-template
     - Source: `src/main/services/webAppService.ts` — Playwright `w.close()` 只销毁 webContents (view)，BaseWindow 可能仍存活；stale entry 需同时检查 window + view 存活状态
     - Affected capabilities: WebApp Service, E2E 测试稳定性
     - Mitigation: `isClosing` 标志 + `isNativeAlive` 双重检查 + viewManager/windowManager 先 delete map 再 destroy
+  - Risk: BaseWindow titleBarStyle: 'hidden' 兼容性
+    - Source: `src/main/mainWindow.ts` — titleBarStyle/titleBarOverlay 通常在 BrowserWindow 文档中描述，BaseWindow 行为需跨平台验证
+    - Affected capabilities: Titlebar System, 主窗口布局
+    - Mitigation: 已在 Windows 上验证，macOS 待验证
 - Unknowns: 无
 - Validation: 现有 channel.test.ts + registry.test.ts 覆盖部分
 - Next Drill-Down: `src/shared/channel/portManager.ts` 为最高风险
@@ -444,14 +462,15 @@ Node: electron-template
 | Frontend UI | `src/renderer/` (React + Zustand + Tailwind) | `main.tsx` | pending | confirmed |
 | Theme System | `src/shared/theme/`, `src/main/services/themeService.ts`, `src/renderer/components/ThemeToggle/`, `src/main/mainWindow.ts` | `ThemeApi` (IPC) + `applyThemeToRoot()` + 离屏渲染防闪烁 | pending | confirmed |
 | Preload Args | `src/shared/preload/args.ts` | `buildPreloadArgs()` / `parsePreloadArgs()` | pending | confirmed |
+| Titlebar System | `src/main/mainWindow.ts`, `src/renderer/components/TitleBar/`, `src/renderer/styles/index.css` | `getTitleBarOptions()` + `<TitleBar />` | pending | confirmed |
 
 ### Module Index Table
 
 | Module / Package | Path | Responsibility | Key Dependencies | Risk Notes |
 | --- | --- | --- | --- | --- |
 | main | `src/main/` | 主进程入口、窗口/视图管理、服务实现 | electron, electron-updater, native | 持有 native 资源引用 |
-| preload | `src/preload/` | Channel 初始化（含 parsePreloadArgs）、contextBridge | electron (contextBridge) | 安全边界 |
-| renderer | `src/renderer/` | React UI、Zustand 状态、renderer 服务 | react, zustand, tailwind | 无 |
+| preload | `src/preload/` | Channel 初始化（含 parsePreloadArgs）、contextBridge 暴露 electronEnv + channel API | electron (contextBridge) | 安全边界 |
+| renderer | `src/renderer/` | React UI（TitleBar + WebCatalog）、Zustand 状态、renderer 服务 | react, zustand, tailwind | 无 |
 | shared | `src/shared/` | 跨进程共享：Channel、Service Registry、API 定义 | (内部) | 核心通信层 |
 | shared/preload | `src/shared/preload/` | Preload 参数工具：build/parse 对称 API | (无) | 新增参数扩展 PRELOAD_ARGS |
 | utils | `src/shared/utils/` | Singleton、日志、序列化、TypedEmitter | electron-log | Singleton 进程限制 |
@@ -465,15 +484,17 @@ Node: electron-template
 | --- | --- | --- | --- | --- |
 | IPC Channel Init | main → preload → renderer | `Channel.init()` + `parsePreloadArgs()` | 建立 MessagePort 双向通道，preload args 控制 timeout/expose | `src/shared/channel/portManager.ts` |
 | Service RPC (renderer→main) | renderer proxy → channel → main handler | `apiDefinitions.invokeRemote()` | 跨进程方法调用 | `src/shared/serviceRegistry/apiDefinitions.ts` |
-| Window Create | main → windowManager → viewManager | `createMainWindow()` | 离屏 BaseWindow + backgroundColor + WebContentsView + 50ms 居中 | `src/main/mainWindow.ts` |
+| Window Create | main → windowManager → viewManager | `createMainWindow()` | 离屏 BaseWindow + backgroundColor + titleBarStyle 平台适配 + WebContentsView + 50ms 居中 | `src/main/mainWindow.ts` |
 | WebApp Create | renderer → channel → main → viewManager | `webAppMainApi.createWebApp()` | 独立 BaseWindow + ManagedView (preload + channelExpose:false) | `src/main/services/webAppService.ts` |
 | Service Timeout | decorator → metadataRegistry → Proxy handler | `@Timeout(500)` | 同进程 Promise.race / 跨进程 timeout 传递 | `src/shared/serviceRegistry/decorators.ts` |
+| Platform Titlebar | preload → renderer | `contextBridge.exposeInMainWorld('electronEnv')` → `platform-${platform}` class → TitleBar 预留安全区 | macOS 左 80px traffic lights，Win/Linux 右 138px 窗口控制 | `src/renderer/components/TitleBar/index.tsx` |
 
 ### Quick File Index
 
 - `src/main/index.ts`: 主进程入口
-- `src/preload/index.ts`: preload 入口（parsePreloadArgs → channel.init）
-- `src/renderer/main.tsx`: renderer 入口
+- `src/preload/index.ts`: preload 入口（contextBridge electronEnv + parsePreloadArgs → channel.init）
+- `src/renderer/main.tsx`: renderer 入口（theme 初始化 + platform class + ReactDOM）
+- `src/global.d.ts`: `__SOURCE_FILE__` + `ElectronEnv` + `Window.electronEnv` 类型声明
 - `src/shared/channel/index.ts`: Channel 核心实现
 - `src/shared/channel/impl.ts`: ChannelApiImpl 消息收发
 - `src/shared/channel/portManager.ts`: MessagePort 管理 (高风险)
@@ -484,16 +505,18 @@ Node: electron-template
 - `src/shared/theme/presets.ts`: lightTheme/darkTheme 色板常量
 - `src/shared/services/themeApi.ts`: ThemeApi IPC 接口
 - `src/main/services/themeService.ts`: 主进程主题状态管理
-- `src/renderer/components/ThemeToggle/index.tsx`: 主题切换按钮 (ThemeApi IPC)
-- `src/renderer/styles/index.css`: CSS 变量色板 (Light/Dark) + Tailwind @theme
+- `src/renderer/components/TitleBar/index.tsx`: 自定义标题栏（图标 + 标题 + ThemeToggle，平台预留安全区）
+- `src/renderer/components/ThemeToggle/index.tsx`: 主题切换按钮（嵌入 TitleBar）
+- `src/renderer/styles/index.css`: CSS 变量色板 + Tailwind @theme + titlebar 样式 + 平台预留区
+- `src/renderer/public/icon.png`: 标题栏应用图标资源
 - `src/shared/utils/singleton.ts`: Singleton 装饰器
 - `src/shared/utils/serialize/index.ts`: 序列化/反序列化
 - `src/shared/utils/log/index.ts`: 统一日志
-- `src/main/mainWindow.ts`: 主窗口创建（离屏渲染 + backgroundColor + 居中定位）
+- `src/main/mainWindow.ts`: 主窗口创建（离屏渲染 + backgroundColor + titleBarStyle 平台适配 + TITLE_BAR_HEIGHT=35 + dev DevTools）
 - `src/shared/services/webAppApi.ts`: WebApp API 定义 (WebAppMainApi)
 - `src/main/services/webAppService.ts`: WebApp 主进程服务实现（ViewManager 管理 view）
 - `src/renderer/stores/webAppStore.ts`: WebApp Zustand store
-- `src/renderer/components/WebCatalog/index.tsx`: Web 目录 UI (AddDialog + EditDialog)
+- `src/renderer/components/WebCatalog/index.tsx`: Web 目录 UI (flex-1 布局，无 h1 标题)
 - `src/renderer/components/ui/dialog.tsx`: shadcn Dialog 组件
 - `src/shared/serviceRegistry/decorators.ts`: @Timeout / @MethodTimeout 装饰器
 - `src/shared/serviceRegistry/serviceMetadataRegistry.ts`: 服务元数据注册表

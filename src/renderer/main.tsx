@@ -15,6 +15,12 @@ async function main() {
   } catch {
     applyThemeToRoot(defaultTheme.tokens);
   }
+
+  // Add platform class for titlebar platform-specific styles
+  if (window.electronEnv?.platform) {
+    document.body.classList.add(`platform-${window.electronEnv.platform}`);
+  }
+
   ReactDOM.createRoot(document.getElementById('root')!).render(<App />);
 }
 
