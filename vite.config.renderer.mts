@@ -20,14 +20,20 @@ export default defineConfig({
   build: {
     outDir: '../../dist/renderer',
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'src/renderer/index.html'),
+        'webapp-titlebar': path.resolve(__dirname, 'src/renderer/webapp-titlebar.html'),
+      },
+    },
   },
   plugins: [
     react(),
     tailwindcss(),
     sourceFilePlugin(),
     visualizer({
-      open: true, // 构建完成后自动打开浏览器
-      filename: 'stats.html', // 生成的分析文件名
+      open: false,
+      filename: 'stats.html',
       gzipSize: true,
       brotliSize: true,
     }),

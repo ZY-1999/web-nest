@@ -19,6 +19,7 @@
   - 多窗口生命周期管理 (WindowManager)
   - WebContentsView 子窗口管理 (ViewManager)，支持嵌入式/独立/离屏三种模式
   - Web 应用管理 (WebAppService)：创建/打开/关闭/删除 Web 应用，持久化到本地 JSON
+  - Web App 独立窗口自定义双行标题栏（导航栏 + 标题栏），per-view ServiceRegistry 服务注册
   - Preload additionalArguments 通道配置 (buildPreloadArgs / parsePreloadArgs)
   - Light/Dark 主题系统，主进程 single source of truth，IPC 同步到 renderer
   - 应用持久化 + favicon 缓存 (`~/.web-nest/`)
@@ -136,6 +137,9 @@ Agent 完成代码修改后，必须按以下顺序验证：
 3. `pnpm run test` — 所有现有测试 + 新增测试通过（当前 139 tests）
 4. `当前约定` 如涉及构建/打包相关改动，运行 `pnpm run build`
 5. `当前约定` 如涉及 UI 改动，运行 `pnpm run dev` 目视确认
+6. `当前约定` 如涉及跨进程通信，运行 `pnpm run test:e2e`（当前 19 E2E tests）
+4. `当前约定` 如涉及构建/打包相关改动，运行 `pnpm run build`
+5. `当前约定` 如涉及 UI 改动，运行 `pnpm run dev` 目视确认
 6. `当前约定` 如涉及跨进程通信，运行 `pnpm run test:e2e`
 
 ### CI 流水线
@@ -182,6 +186,8 @@ GitHub Actions CI 包含三个 job：
 5. **无法确定是否属于模板范围**: 保守处理，不添加，记录问题让项目维护者决定
 
 ## 文档维护规则
+
+** 用户进行总结或更新或维护文档时 更新维护本文档及关联文档 **
 
 1. **本文档是活文档** — 随项目演进更新，不要等到"完美"才写
 2. **架构变更时同步更新** — 新增模块、修改通信模式、更换依赖时，更新对应章节

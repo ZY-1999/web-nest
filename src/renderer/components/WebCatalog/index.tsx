@@ -258,6 +258,7 @@ export function WebCatalog() {
 
   return (
     <div className="flex-1 overflow-auto bg-background p-8 pt-2">
+      <h1 className="sr-only">Web Catalog</h1>
       <div className="mx-auto grid max-w-4xl grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-4">
         {apps.map((app) => (
           <AppCard

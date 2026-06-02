@@ -23,6 +23,9 @@ export const paths = {
   getRendererPath() {
     return path.join(__dirname, '../renderer/index.html');
   },
+  getWebAppTitlebarPath() {
+    return path.join(__dirname, '../renderer/webapp-titlebar.html');
+  },
   getAssetPath(...segments: string[]) {
     return path.join(__dirname, 'assets', ...segments);
   },

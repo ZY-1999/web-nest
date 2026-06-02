@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import { WebAppMainApi, WebAppState } from '@/shared/services';
 import { Singleton } from '@/shared/utils/singleton';
 import { logger } from '@/shared/utils/log';
@@ -7,6 +8,11 @@ import { paths } from '@/main/utils/paths';
 import { loadApps, saveApps } from '@/main/services/appConfigService';
 import { fetchFaviconDataUrl } from '@/main/services/faviconService';
 import { buildPreloadArgs } from '@/shared/preload/args';
+import { isDev } from '@/shared/utils/env';
+import { getTitleBarOptions, WEBAPP_TITLEBAR_HEIGHT } from '@/shared/titlebar';
+import { serviceRegistry } from '@/shared/serviceRegistry';
+import { themeService } from '@/main/services/themeService';
+import { WebAppWindowService } from '@/main/services/webAppWindowService';
 
 const log = logger(__SOURCE_FILE__);
 
@@ -22,6 +28,7 @@ interface WebAppEntry {
   appId: string;
   windowId: string;
   viewId: string;
+  titlebarViewId: string;
   url: string;
   title: string;
   faviconUrl: string;
@@ -53,9 +60,10 @@ export class WebAppService extends WebAppMainApi {
     saveApps(this.getConfigDir(), this.getPersistedApps());
   }
 
-  /** Destroy view + window resources for an in-memory entry. */
+  /** Destroy content view + titlebar view + window resources for an in-memory entry. */
   private destroyEntry(entry: WebAppEntry) {
     viewManager.destroyView(entry.viewId);
+    viewManager.destroyView(entry.titlebarViewId);
     windowManager.destroyWindow(entry.windowId);
     this.apps.delete(entry.appId);
   }
@@ -88,12 +96,38 @@ export class WebAppService extends WebAppMainApi {
     title: string,
   ): Promise<WebAppEntry> {
     const windowId = windowManager.createWindow({
-      options: { width: 1200, height: 800, title },
+      options: {
+        width: 1200,
+        height: 800,
+        title,
+        ...getTitleBarOptions(),
+      },
     });
 
     const nativeWindow = windowManager.getNativeWindow(windowId)!;
+    const contentBounds = nativeWindow.getContentBounds();
 
-    // Create view via ViewManager — external URL, preload runs but channel not exposed to page
+    // ── Titlebar view (local renderer, 70px) ──────────────────────────────
+    const titlebarUrl = isDev()
+      ? 'http://localhost:5173/webapp-titlebar.html'
+      : pathToFileURL(paths.getWebAppTitlebarPath()).href;
+
+    const titlebarViewId = await viewManager.createView({
+      url: titlebarUrl,
+      type: 'embedded',
+      preload: paths.getPreloadPath(),
+      additionalArguments: buildPreloadArgs({ channelExpose: true }),
+    });
+
+    const titlebarView = viewManager.getView(titlebarViewId)!;
+    titlebarView.attachTo(nativeWindow, {
+      x: 0,
+      y: 0,
+      width: contentBounds.width,
+      height: WEBAPP_TITLEBAR_HEIGHT,
+    });
+
+    // ── Content view (external URL, fills remaining space) ────────────────
     const viewId = await viewManager.createView({
       url,
       type: 'embedded',
@@ -102,12 +136,52 @@ export class WebAppService extends WebAppMainApi {
     });
 
     const view = viewManager.getView(viewId)!;
-    view.attachTo(nativeWindow, { ...nativeWindow.getContentBounds(), x: 0, y: 0 });
+    view.attachTo(nativeWindow, {
+      x: 0,
+      y: WEBAPP_TITLEBAR_HEIGHT,
+      width: contentBounds.width,
+      height: contentBounds.height - WEBAPP_TITLEBAR_HEIGHT,
+    });
 
-    // Resize view with window
+    // ── Register all services on titlebar channel ────────────────────────
+    // Register BEFORE fetching favicon — service must be available when titlebar renderer mounts
+    const windowService = new WebAppWindowService({ contentView: view });
+    serviceRegistry.implementService(
+      titlebarView.channel,
+      themeService,
+      webAppService,
+      windowService,
+    );
+
+    // Fetch favicon async and backfill into service
+    fetchFaviconDataUrl(faviconUrl).then((dataUrl) => {
+      windowService.updateFaviconDataUrl(dataUrl);
+      const wc = view.webContents;
+      if (!wc.isDestroyed()) {
+        const navState = { ...windowService.buildNavState(), faviconDataUrl: dataUrl };
+        viewManager.requestTo(titlebarViewId, 'url-changed', navState).catch(() => {
+          log.debug('Favicon push failed — titlebar view may be destroyed:', appId);
+        });
+      }
+    });
+
+    // Resize both views with window
     const managedWin = windowManager.getWindow(windowId)!;
-    managedWin.on('resized', (_bounds, contentBounds) => {
-      view.webContentsView.setBounds({ ...contentBounds, x: 0, y: 0 });
+    managedWin.on('resized', (_bounds, resizedContentBounds) => {
+      if (!nativeWindow.isDestroyed()) {
+        titlebarView.webContentsView.setBounds({
+          x: 0,
+          y: 0,
+          width: resizedContentBounds.width,
+          height: WEBAPP_TITLEBAR_HEIGHT,
+        });
+        view.webContentsView.setBounds({
+          x: 0,
+          y: WEBAPP_TITLEBAR_HEIGHT,
+          width: resizedContentBounds.width,
+          height: resizedContentBounds.height - WEBAPP_TITLEBAR_HEIGHT,
+        });
+      }
     });
 
     // Track page title updates
@@ -119,6 +193,15 @@ export class WebAppService extends WebAppMainApi {
       }
     });
 
+    // Push navigation state to titlebar on page navigation
+    const pushNavState = () => {
+      if (view.webContents.isDestroyed()) { return; }
+      viewManager.requestTo(titlebarViewId, 'url-changed', windowService.buildNavState())
+        .catch(() => { /* titlebar view may be destroyed */ });
+    };
+    view.webContents.on('did-navigate', pushNavState);
+    view.webContents.on('did-navigate-in-page', pushNavState);
+
     // Cleanup on window close — use 'close' event (synchronous) to mark entry,
     // 'closed' event (async) to destroy resources.
     nativeWindow.on('close', () => {
@@ -129,7 +212,9 @@ export class WebAppService extends WebAppMainApi {
     });
 
     nativeWindow.on('closed', () => {
+      // Destroy content view first, then titlebar (same order as destroyEntry)
       viewManager.destroyView(viewId);
+      viewManager.destroyView(titlebarViewId);
       this.apps.delete(appId);
       windowManager.destroyWindow(windowId);
       log.info('Web app window closed:', appId);
@@ -137,7 +222,7 @@ export class WebAppService extends WebAppMainApi {
 
     const loadedTitle = view.webContents.getTitle() || title;
 
-    return { appId, windowId, viewId, url, title: loadedTitle, faviconUrl };
+    return { appId, windowId, viewId, titlebarViewId, url, title: loadedTitle, faviconUrl };
   }
 
   async createWebApp(url: string): Promise<WebAppState> {

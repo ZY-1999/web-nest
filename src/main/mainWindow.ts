@@ -8,31 +8,9 @@ import { paths } from './utils/paths';
 import { channel } from '@/shared/channel';
 import { logger } from '@/shared/utils/log';
 import { themeService } from './services/themeService';
+import { getTitleBarOptions } from '@/shared/titlebar';
 
 const log = logger(__SOURCE_FILE__);
-
-/** Title bar height — shared constant for main process and renderer overlay alignment. */
-export const TITLE_BAR_HEIGHT = 35;
-
-/** Platform-specific titleBarStyle options for BaseWindow. */
-function getTitleBarOptions(): Electron.BaseWindowConstructorOptions {
-  if (process.platform === 'darwin') {
-    return {
-      titleBarStyle: 'hidden',
-      trafficLightPosition: { x: 14, y: 12 },
-    };
-  }
-
-  // Windows & Linux
-  return {
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      height: TITLE_BAR_HEIGHT,
-      color: '#00000000',
-      symbolColor: '#666666',
-    },
-  };
-}
 
 export async function createMainWindow() {
   log.info('Creating main window, env:', isDev() ? 'development' : 'production');
