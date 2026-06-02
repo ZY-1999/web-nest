@@ -9,22 +9,28 @@
 
 ## 项目概览
 
-- **项目名称**: electron-template
-- **项目类型**: Electron 桌面应用脚手架模板（非最终产品）
-- **定位**: 提供开箱即用的 Electron + React + TypeScript 开发环境，使用者 clone 后替换占位符即可开始业务开发
+- **项目名称**: web-nest
+- **项目类型**: 基于 Electron 的 Web 应用启动器（桌面产品）
+- **定位**: 用户通过 web-nest 管理和快速打开常用 Web 应用，支持持久化、favicon 缓存、卡片式 UI
+- **模板来源**: 基于 `electron-template` 模板初始化，架构和基础设施与模板保持同步
 - **核心能力**:
   - MessagePort IPC 双向类型安全通信
   - 声明式跨进程服务注册表 (ServiceRegistry / RPC)
   - 多窗口生命周期管理 (WindowManager)
   - WebContentsView 子窗口管理 (ViewManager)，支持嵌入式/独立/离屏三种模式
+  - Web 应用管理 (WebAppService)：创建/打开/关闭/删除 Web 应用，持久化到本地 JSON
+  - Preload additionalArguments 通道配置 (buildPreloadArgs / parsePreloadArgs)
+  - Light/Dark 主题系统，主进程 single source of truth，IPC 同步到 renderer
+  - 应用持久化 + favicon 缓存 (`~/.web-nest/`)
   - 自动更新、系统托盘、统一日志
-  - Rust native 模块集成示例 (@napi-rs)
+  - Rust native 模块集成 (@napi-rs)
 - **主要语言**: TypeScript, Rust (native 模块)
 - **运行形态**: 桌面应用，electron-builder 打包（Windows NSIS 为主）
+- **路径约定**: 配置通过 `WEB_NEST_HOME` 环境变量覆盖，默认 `~/.web-nest/`
 
 ## 当前项目阶段
 
-`已确定` **模板稳定维护阶段** — 核心架构已定型，已有完整构建/测试/CI 流程。后续以新增能力、完善文档、修复问题为主。
+`已确定` **功能开发阶段** — 核心架构已定型，基础功能（窗口/视图管理、WebApp CRUD、持久化、主题）已完成。后续以完善 UI 体验、边界情况处理、E2E 覆盖为主。
 
 ## Agent 工作原则
 
@@ -68,6 +74,7 @@
 - **`ServiceRegistry`** (`src/shared/serviceRegistry/`): 服务注册/发现/RPC，`defineApi()` + `implementService()`
 - **`WindowManager`** (`src/main/windowManager/`): 多窗口生命周期，macOS 关闭隐藏到托盘
 - **`ViewManager`** (`src/main/viewManager/`): WebContentsView 管理，内置通道通信和广播
+- **Preload Args** (`src/shared/preload/args.ts`): 主进程通过 `buildPreloadArgs()` 构建 `additionalArguments`，preload 通过 `parsePreloadArgs()` 解析，对称 API
 
 ## 修改代码前必须阅读
 
@@ -104,7 +111,7 @@
 
 | 层级     | 工具           | 配置                       | 位置                                  |
 | -------- | -------------- | -------------------------- | ------------------------------------- |
-| 单元测试 | Vitest         | `vitest.config.ts`         | `src/__tests__/`                      |
+| 单元测试 | Vitest         | `vitest.config.mts`        | `src/__tests__/`                      |
 | E2E 测试 | Playwright     | `playwright.config.ts`     | `tests/e2e/`                          |
 | CI 验证  | GitHub Actions | `.github/workflows/ci.yml` | lint → typecheck → test → build → e2e |
 
@@ -126,7 +133,7 @@ Agent 完成代码修改后，必须按以下顺序验证：
 
 1. `pnpm run typecheck` — 类型检查通过
 2. `pnpm run lint` — 无 lint 错误
-3. `pnpm run test` — 所有现有测试 + 新增测试通过
+3. `pnpm run test` — 所有现有测试 + 新增测试通过（当前 139 tests）
 4. `当前约定` 如涉及构建/打包相关改动，运行 `pnpm run build`
 5. `当前约定` 如涉及 UI 改动，运行 `pnpm run dev` 目视确认
 6. `当前约定` 如涉及跨进程通信，运行 `pnpm run test:e2e`
@@ -138,6 +145,16 @@ GitHub Actions CI 包含三个 job：
 1. **check** (ubuntu): lint → typecheck → unit test
 2. **build** (windows/macos/ubuntu 三平台): build
 3. **e2e** (windows): Playwright E2E 测试
+
+## 销毁安全约定
+
+`已确定` 原生资源（BaseWindow、WebContents）销毁后访问属性会抛异常。所有 destroy/detach 方法必须遵循：
+
+1. **Map 先 delete 再 destroy**：`viewManager.destroyView()` 和 `windowManager.destroyWindow()` 先从 Map 删除再调 `destroy()`，防止重入
+2. **基础设施层 try-catch**：`ManagedView.detach()`/`destroy()` 和 `ManagedWindow.destroy()` 内部 try-catch 保护原生访问，保证不向上抛异常
+3. **调用层不叠加 try-catch**：基础设施层保证安全后，调用方（如 webAppService）直接调用，无需冗余 try-catch
+4. **stale entry 检测**：检查存活时必须同时检查 window 和 view（Playwright `w.close()` 可能只销毁 webContents 而 BaseWindow 仍存活）
+5. **isClosing 标志**：`nativeWindow.on('close')` 同步标记，早于异步 `closed` 事件，确保 `openWebApp` 能及时感知
 
 ## 代码风格与约束
 

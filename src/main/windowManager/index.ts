@@ -39,8 +39,9 @@ export class WindowManager extends TypedEmitter<WindowEventMap> {
       return;
     }
 
-    win.destroy();
+    // Delete from map first to prevent double-destroy from reentrant calls
     this.windows.delete(windowId);
+    win.destroy();
     this.emit('window-destroyed', windowId);
   }
 

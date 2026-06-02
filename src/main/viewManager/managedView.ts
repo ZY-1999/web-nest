@@ -85,14 +85,14 @@ export class ManagedView extends TypedEmitter<ManagedViewEventMap> implements IM
   }
 
   detach(): void {
-    if (this.hostWindow) {
-      const contentView = this.hostWindow.contentView as {
-        removeChildView?: (v: unknown) => void;
-      };
-      contentView.removeChildView?.(this.webContentsView);
-      this.hostWindow = null;
-      this.emit('state-changed', this.state);
-    }
+    if (!this.hostWindow) return;
+    try {
+      if (!this.hostWindow.isDestroyed()) {
+        (this.hostWindow.contentView as { removeChildView?: (v: unknown) => void })
+          .removeChildView?.(this.webContentsView);
+      }
+    } catch { /* native resource already gone */ }
+    this.hostWindow = null;
   }
 
   toggleDevTools(): void {
@@ -114,8 +114,8 @@ export class ManagedView extends TypedEmitter<ManagedViewEventMap> implements IM
     return {
       id: this.id,
       type: this.type,
-      url: this.webContents.getURL(),
-      bounds: this.type === 'offscreen' ? null : this.webContentsView.getBounds(),
+      url: isDestroyed ? '' : this.webContents.getURL(),
+      bounds: this.type === 'offscreen' || isDestroyed ? null : this.webContentsView.getBounds(),
       visible: this.type !== 'offscreen' && !isDestroyed,
       focused: !isDestroyed && wc.isFocused?.() === true,
       loaded: this._loaded,
@@ -125,15 +125,20 @@ export class ManagedView extends TypedEmitter<ManagedViewEventMap> implements IM
   destroy(): void {
     this.detach();
 
-    this.webContentsSubscriptions.forEach((unsub) => unsub());
+    // webContents may already be destroyed (e.g. closed by Playwright/OS)
+    try {
+      const wc = this.webContentsView.webContents;
+      if (!wc.isDestroyed()) {
+        this.webContentsSubscriptions.forEach((unsub) => unsub());
+        wc.close();
+      }
+    } catch {
+      // webContents native resource already gone
+    }
     this.webContentsSubscriptions = [];
 
     this.removeAllListeners();
 
     this.channel.destroy();
-    const wc = this.webContentsView.webContents;
-    if (!wc.isDestroyed()) {
-      wc.close();
-    }
   }
 }

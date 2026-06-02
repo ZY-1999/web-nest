@@ -94,11 +94,16 @@ export class ManagedWindow extends TypedEmitter<ManagedWindowEventMap> implement
     this.appSubscriptions.forEach((unsub) => unsub());
     this.appSubscriptions = [];
 
-    this.nativeWindow.removeAllListeners();
-    this.removeAllListeners();
-
-    if (!this.nativeWindow.isDestroyed()) {
-      this.nativeWindow.destroy();
+    // nativeWindow may already be destroyed (e.g. closed by Playwright/OS),
+    // accessing properties on a destroyed native object throws
+    try {
+      if (!this.nativeWindow.isDestroyed()) {
+        this.nativeWindow.removeAllListeners();
+        this.nativeWindow.destroy();
+      }
+    } catch {
+      // native resource already gone
     }
+    this.removeAllListeners();
   }
 }

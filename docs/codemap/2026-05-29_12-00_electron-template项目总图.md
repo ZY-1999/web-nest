@@ -1,6 +1,6 @@
 # electron-template CodeMap (project)
 
-Updated: 2026-06-01 — 同步模板 preload args + webAppService 重构为 ViewManager 管理
+Updated: 2026-06-01 — 销毁逻辑安全加固（map 先 delete + try-catch + isClosing + view/window 双存活检查）
 
 ## 1. Orientation
 
@@ -309,6 +309,7 @@ Node: electron-template
     - Modules: renderer (WebCatalog) → channel → main (WebAppService) → viewManager + windowManager
     - Entry: `webAppMainApi.createWebApp(url)` → `WebAppService.createWebApp()` → `viewManager.createView({ preload, additionalArguments: buildPreloadArgs({ channelExpose: false }) })` + `view.attachTo(win)`
     - Effect: 为每个 web app 创建独立 BaseWindow + ManagedView，preload 运行但 channel 不暴露给外部页面
+    - Note: 销毁链路安全保证 — viewManager/windowManager 先 delete map 再 destroy（防重入）；ManagedView/ManagedWindow 内部 try-catch 保护原生资源访问；closed handler 无需 try-catch；openWebApp 通过 isClosing + winAlive + viewAlive 三重检测 stale entry
     - Drill-Down: `src/main/services/webAppService.ts` → `src/renderer/components/WebCatalog/index.tsx`
   - Flow: Service Timeout 生效
     - Modules: decorator → serviceMetadataRegistry → apiDefinitions (Proxy handler)
@@ -379,6 +380,10 @@ Node: electron-template
     - Source: `src/main/viewManager/managedView.ts:22` — `channel ?? new Channel()`，视图可能共享或独立 channel
     - Affected capabilities: View Management, IPC 隔离
     - Suggested Feature CodeMap: View channel 隔离模型
+  - Risk: Playwright 关闭子窗口与 BaseWindow 生命周期不同步
+    - Source: `src/main/services/webAppService.ts` — Playwright `w.close()` 只销毁 webContents (view)，BaseWindow 可能仍存活；stale entry 需同时检查 window + view 存活状态
+    - Affected capabilities: WebApp Service, E2E 测试稳定性
+    - Mitigation: `isClosing` 标志 + `isNativeAlive` 双重检查 + viewManager/windowManager 先 delete map 再 destroy
 - Unknowns: 无
 - Validation: 现有 channel.test.ts + registry.test.ts 覆盖部分
 - Next Drill-Down: `src/shared/channel/portManager.ts` 为最高风险

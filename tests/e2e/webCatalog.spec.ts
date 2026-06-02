@@ -18,6 +18,7 @@ test('clicking + opens dialog and creates web app card', async ({ electronApp })
   await expect(dialog).toBeVisible();
 
   await dialog.locator('[data-testid="add-url-input"]').fill('about:blank');
+  await expect(dialog.locator('[data-testid="add-submit"]')).toBeEnabled();
   await dialog.locator('[data-testid="add-submit"]').click();
 
   const card = mainWindow.locator('[data-testid="webapp-card"]');
@@ -34,6 +35,7 @@ test('hover menu opens edit dialog and saves title', async ({ electronApp }) => 
   const addDialog = mainWindow.locator('[role="dialog"]');
   await expect(addDialog).toBeVisible();
   await addDialog.locator('[data-testid="add-url-input"]').fill('about:blank');
+  await expect(addDialog.locator('[data-testid="add-submit"]')).toBeEnabled();
   await addDialog.locator('[data-testid="add-submit"]').click();
 
   const card = mainWindow.locator('[data-testid="webapp-card"]');
@@ -61,6 +63,7 @@ test('deleting a web app removes the card', async ({ electronApp }) => {
   const addDialog = mainWindow.locator('[role="dialog"]');
   await expect(addDialog).toBeVisible();
   await addDialog.locator('[data-testid="add-url-input"]').fill('about:blank');
+  await expect(addDialog.locator('[data-testid="add-submit"]')).toBeEnabled();
   await addDialog.locator('[data-testid="add-submit"]').click();
 
   const card = mainWindow.locator('[data-testid="webapp-card"]');
@@ -84,6 +87,7 @@ test('clicking card opens web app window', async ({ electronApp }) => {
   const addDialog = mainWindow.locator('[role="dialog"]');
   await expect(addDialog).toBeVisible();
   await addDialog.locator('[data-testid="add-url-input"]').fill('about:blank');
+  await expect(addDialog.locator('[data-testid="add-submit"]')).toBeEnabled();
   await addDialog.locator('[data-testid="add-submit"]').click();
 
   const card = mainWindow.locator('[data-testid="webapp-card"]');
@@ -106,6 +110,7 @@ test('favicon shows in card', async ({ electronApp }) => {
   const addDialog = mainWindow.locator('[role="dialog"]');
   await expect(addDialog).toBeVisible();
   await addDialog.locator('[data-testid="add-url-input"]').fill('about:blank');
+  await expect(addDialog.locator('[data-testid="add-submit"]')).toBeEnabled();
   await addDialog.locator('[data-testid="add-submit"]').click();
 
   const card = mainWindow.locator('[data-testid="webapp-card"]');
@@ -125,6 +130,7 @@ test('app persists across restart', async ({ electronApp }) => {
   const addDialog = mainWindow.locator('[role="dialog"]');
   await expect(addDialog).toBeVisible();
   await addDialog.locator('[data-testid="add-url-input"]').fill('about:blank');
+  await expect(addDialog.locator('[data-testid="add-submit"]')).toBeEnabled();
   await addDialog.locator('[data-testid="add-submit"]').click();
 
   const card = mainWindow.locator('[data-testid="webapp-card"]');
@@ -150,6 +156,7 @@ test('clicking card after close reopens app window', async ({ electronApp, mainP
   const addDialog = mainWindow.locator('[role="dialog"]');
   await expect(addDialog).toBeVisible();
   await addDialog.locator('[data-testid="add-url-input"]').fill('about:blank');
+  await expect(addDialog.locator('[data-testid="add-submit"]')).toBeEnabled();
   await addDialog.locator('[data-testid="add-submit"]').click();
 
   const card = mainWindow.locator('[data-testid="webapp-card"]');

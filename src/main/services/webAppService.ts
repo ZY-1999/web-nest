@@ -25,6 +25,7 @@ interface WebAppEntry {
   url: string;
   title: string;
   faviconUrl: string;
+  isClosing?: boolean;
 }
 
 @Singleton()
@@ -50,6 +51,34 @@ export class WebAppService extends WebAppMainApi {
 
   private persist() {
     saveApps(this.getConfigDir(), this.getPersistedApps());
+  }
+
+  /** Destroy view + window resources for an in-memory entry. */
+  private destroyEntry(entry: WebAppEntry) {
+    viewManager.destroyView(entry.viewId);
+    windowManager.destroyWindow(entry.windowId);
+    this.apps.delete(entry.appId);
+  }
+
+  /** Check if a native property access is safe (returns false on destroyed or inaccessible objects). */
+  private static isNativeAlive(accessor: () => boolean): boolean {
+    try {
+      return accessor();
+    } catch {
+      return false;
+    }
+  }
+
+  /** Check if an entry's view and window are both alive. */
+  private isEntryAlive(entry: WebAppEntry): boolean {
+    if (entry.isClosing) return false;
+
+    const nativeWin = windowManager.getNativeWindow(entry.windowId);
+    const winAlive = WebAppService.isNativeAlive(() => !!nativeWin && !nativeWin.isDestroyed());
+    if (!winAlive) return false;
+
+    const view = viewManager.getView(entry.viewId);
+    return WebAppService.isNativeAlive(() => !!view && !view.webContents.isDestroyed());
   }
 
   private async createWindowForApp(
@@ -90,7 +119,15 @@ export class WebAppService extends WebAppMainApi {
       }
     });
 
-    // Cleanup on window close
+    // Cleanup on window close — use 'close' event (synchronous) to mark entry,
+    // 'closed' event (async) to destroy resources.
+    nativeWindow.on('close', () => {
+      const entry = this.apps.get(appId);
+      if (entry) {
+        entry.isClosing = true;
+      }
+    });
+
     nativeWindow.on('closed', () => {
       viewManager.destroyView(viewId);
       this.apps.delete(appId);
@@ -120,23 +157,16 @@ export class WebAppService extends WebAppMainApi {
 
   async closeWebApp(id: string): Promise<void> {
     const entry = this.apps.get(id);
-    if (!entry) {
-      return;
-    }
+    if (!entry) return;
 
-    viewManager.destroyView(entry.viewId);
-    windowManager.destroyWindow(entry.windowId);
-    this.apps.delete(id);
+    this.destroyEntry(entry);
     log.info('Web app closed:', id);
   }
 
   async deleteWebApp(id: string): Promise<void> {
-    // Close window if open
     const entry = this.apps.get(id);
     if (entry) {
-      viewManager.destroyView(entry.viewId);
-      windowManager.destroyWindow(entry.windowId);
-      this.apps.delete(id);
+      this.destroyEntry(entry);
     }
 
     // Remove from persisted storage
@@ -148,35 +178,24 @@ export class WebAppService extends WebAppMainApi {
   }
 
   async openWebApp(id: string): Promise<WebAppState> {
-    log.info('openWebApp called:', id);
     const configDir = this.getConfigDir();
     const persisted = loadApps(configDir);
-    log.info('openWebApp persisted count:', persisted.length, 'in-memory count:', this.apps.size);
     const appData = persisted.find((a) => a.id === id);
     if (!appData) {
-      log.warn('openWebApp: app not found in persisted:', id);
       throw new Error(`Web app not found: ${id}`);
     }
 
-    // If already open and window alive, just return
+    // If already open and alive, just return
     if (this.apps.has(id)) {
       const existing = this.apps.get(id)!;
-      const nativeWin = windowManager.getNativeWindow(existing.windowId);
-      const winDestroyed = nativeWin?.isDestroyed() ?? true;
-      const view = viewManager.getView(existing.viewId);
-      const viewAlive = view !== undefined && !view.webContents.isDestroyed();
-      log.info('openWebApp: entry exists, winDestroyed:', winDestroyed, 'viewAlive:', viewAlive);
-      if (!winDestroyed && viewAlive) {
-        log.info('openWebApp: window alive, returning existing');
+      if (this.isEntryAlive(existing)) {
         const faviconDataUrl = await fetchFaviconDataUrl(existing.faviconUrl);
         return { id: existing.appId, url: existing.url, title: existing.title, faviconUrl: existing.faviconUrl, faviconDataUrl };
       }
-      // Stale entry: window destroyed but cleanup not yet processed
-      log.info('openWebApp: stale entry detected, cleaning up:', id);
+      // Stale entry: window/view is closing or already destroyed
       this.apps.delete(id);
     }
 
-    log.info('openWebApp: creating window for:', id, appData.url);
     const entry = await this.createWindowForApp(id, appData.url, appData.faviconUrl, appData.title);
 
     this.apps.set(id, entry);

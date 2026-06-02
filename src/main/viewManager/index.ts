@@ -70,8 +70,9 @@ export class ViewManager extends TypedEmitter<ViewEventMap> implements ChannelCe
       return;
     }
 
-    view.destroy();
+    // Delete from map first to prevent double-destroy from reentrant calls
     this.views.delete(viewId);
+    view.destroy();
     this.emit('view-destroyed', viewId);
   }
 
