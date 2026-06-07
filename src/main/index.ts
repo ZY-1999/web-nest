@@ -5,8 +5,10 @@ import { appTray } from './tray';
 import { createMainWindow } from './mainWindow';
 import { registerMainServices } from './services';
 import { serialize } from '@/shared/utils/serialize';
-import { windowManager } from './windowManager';
-import { viewManager } from './viewManager';
+import { paths } from './utils/paths';
+
+// Configure session data directory before any sessions are created
+app.setPath('sessionData', paths.getSessionDir());
 
 logManager.initLog({
   level: app.isPackaged ? 'info' : 'debug',

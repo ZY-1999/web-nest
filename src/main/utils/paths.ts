@@ -16,6 +16,11 @@ export const paths = {
     fs.mkdirSync(dir, { recursive: true });
     return dir;
   },
+  getSessionDir(): string {
+    const dir = path.join(this.getCacheDir(), 'sessions');
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  },
 
   getPreloadPath() {
     return path.join(__dirname, '../preload/index.js');

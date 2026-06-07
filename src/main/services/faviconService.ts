@@ -6,18 +6,36 @@ import { logger } from '@/shared/utils/log';
 
 const log = logger(__SOURCE_FILE__);
 
-function cachePath(faviconUrl: string): string {
-  const hash = Buffer.from(faviconUrl).toString('base64url').slice(0, 32);
-  return path.join(paths.getCacheDir(), `${hash}.txt`);
+function faviconCachePath(appId: string): string {
+  return path.join(paths.getCacheDir(), 'favicons', `${appId}.txt`);
 }
 
-export async function fetchFaviconDataUrl(faviconUrl: string): Promise<string> {
+/** Read cached favicon data URL synchronously. Returns undefined if not cached. */
+export function getCachedFaviconDataUrlSync(appId: string): string | undefined {
+  const cp = faviconCachePath(appId);
+  if (fs.existsSync(cp)) {
+    return fs.readFileSync(cp, 'utf-8');
+  }
+  return undefined;
+}
+
+/** Delete cached favicon for an app. */
+export function clearAppFaviconCache(appId: string): void {
+  const cp = faviconCachePath(appId);
+  try {
+    if (fs.existsSync(cp)) {
+      fs.unlinkSync(cp);
+    }
+  } catch { /* ignore cleanup errors */ }
+}
+
+export async function fetchFaviconDataUrl(appId: string, faviconUrl: string): Promise<string> {
   if (!faviconUrl) {
     return '';
   }
 
-  // Check cache first
-  const cp = cachePath(faviconUrl);
+  // Check per-app cache first
+  const cp = faviconCachePath(appId);
   if (fs.existsSync(cp)) {
     return fs.readFileSync(cp, 'utf-8');
   }
@@ -34,7 +52,8 @@ export async function fetchFaviconDataUrl(faviconUrl: string): Promise<string> {
     const buffer = Buffer.from(await response.arrayBuffer());
     const dataUrl = `data:${contentType};base64,${buffer.toString('base64')}`;
 
-    // Write cache
+    // Write to per-app cache
+    fs.mkdirSync(path.dirname(cp), { recursive: true });
     fs.writeFileSync(cp, dataUrl, 'utf-8');
 
     return dataUrl;

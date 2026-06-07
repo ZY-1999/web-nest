@@ -11,9 +11,11 @@ export const mockApp = {
   getVersion: vi.fn(() => '1.0.0'),
   setName: vi.fn(),
   setPath: vi.fn(),
+  setAppUserModelId: vi.fn(),
   ready: vi.fn(),
   whenReady: vi.fn(() => Promise.resolve()),
   isReady: vi.fn(() => true),
+  isPackaged: false,
   addListener: vi.fn(),
   removeListener: vi.fn(),
   removeAllListeners: vi.fn(),
@@ -66,6 +68,7 @@ export const mockBaseWindow = {
   getTitle: vi.fn(() => 'Test Window'),
   setMenu: vi.fn(),
   setMenuBarVisibility: vi.fn(),
+  setIcon: vi.fn(),
   id: 1,
 };
 
@@ -196,5 +199,16 @@ export function createMockElectron() {
     contextBridge: mockContextBridge,
     MessageChannelMain: vi.fn(() => createMockMessageChannel()),
     WebContentsView: vi.fn(() => ({ ...mockWebContentsView })),
+    session: {
+      fromPartition: vi.fn(() => ({
+        clearStorageData: vi.fn(() => Promise.resolve()),
+        clearCache: vi.fn(() => Promise.resolve()),
+      })),
+    },
+    nativeImage: {
+      createFromDataURL: vi.fn(() => ({ isEmpty: () => false })),
+      createFromPath: vi.fn(() => ({ isEmpty: () => false })),
+      createEmpty: vi.fn(() => ({ isEmpty: () => true })),
+    },
   };
 }

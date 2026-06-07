@@ -1,4 +1,7 @@
 import { pathToFileURL } from 'node:url';
+import path from 'node:path';
+import fs from 'node:fs';
+import { app, session, nativeImage } from 'electron';
 import { WebAppMainApi, WebAppState } from '@/shared/services';
 import { Singleton } from '@/shared/utils/singleton';
 import { logger } from '@/shared/utils/log';
@@ -6,7 +9,7 @@ import { windowManager } from '@/main/windowManager';
 import { viewManager } from '@/main/viewManager';
 import { paths } from '@/main/utils/paths';
 import { loadApps, saveApps } from '@/main/services/appConfigService';
-import { fetchFaviconDataUrl } from '@/main/services/faviconService';
+import { fetchFaviconDataUrl, getCachedFaviconDataUrlSync, clearAppFaviconCache } from '@/main/services/faviconService';
 import { buildPreloadArgs } from '@/shared/preload/args';
 import { isDev } from '@/shared/utils/env';
 import { getTitleBarOptions, WEBAPP_TITLEBAR_HEIGHT } from '@/shared/titlebar';
@@ -22,6 +25,18 @@ function generateWebAppId(): string {
 
 function googleFaviconUrl(domain: string): string {
   return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
+}
+
+/** Load the app icon as a base64 data URL for use as default window/titlebar icon. */
+let cachedDefaultIconDataUrl: string | undefined;
+function loadDefaultIconDataUrl(): string | undefined {
+  if (cachedDefaultIconDataUrl !== undefined) { return cachedDefaultIconDataUrl; }
+  const iconPath = path.join(paths.getIconPath(), 'app', 'icon.png');
+  if (fs.existsSync(iconPath)) {
+    const buf = fs.readFileSync(iconPath);
+    cachedDefaultIconDataUrl = `data:image/png;base64,${buf.toString('base64')}`;
+  }
+  return cachedDefaultIconDataUrl;
 }
 
 interface WebAppEntry {
@@ -68,6 +83,14 @@ export class WebAppService extends WebAppMainApi {
     this.apps.delete(entry.appId);
   }
 
+  /** Clear all session data for a web app (cookies, cache, storage). */
+  private async clearAppSession(appId: string): Promise<void> {
+    const ses = session.fromPartition(`persist:webapp-${appId}`);
+    await ses.clearStorageData();
+    await ses.clearCache();
+    log.info('Session cleared for app:', appId);
+  }
+
   /** Check if a native property access is safe (returns false on destroyed or inaccessible objects). */
   private static isNativeAlive(accessor: () => boolean): boolean {
     try {
@@ -95,14 +118,35 @@ export class WebAppService extends WebAppMainApi {
     faviconUrl: string,
     title: string,
   ): Promise<WebAppEntry> {
+    // Use cached favicon for initial icon (avoids network wait)
+    const cachedFaviconDataUrl = getCachedFaviconDataUrlSync(appId);
+    const initialIconDataUrl = cachedFaviconDataUrl ?? loadDefaultIconDataUrl();
+
+    // Build initial window icon: cached favicon → NativeImage, fallback to default icon file
+    const defaultIconPath = path.join(paths.getIconPath(), 'app', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
+    let windowIcon: string | Electron.NativeImage = defaultIconPath;
+    if (initialIconDataUrl) {
+      try {
+        const img = nativeImage.createFromDataURL(initialIconDataUrl);
+        if (!img.isEmpty()) { windowIcon = img; }
+      } catch { /* favicon format unsupported by nativeImage, fallback to file icon */ }
+    }
+
+    // Set unique AppUserModelId for independent taskbar icon (Windows)
+    app.setAppUserModelId(`web-nest.webapp-${appId}`);
+
     const windowId = windowManager.createWindow({
       options: {
         width: 1200,
         height: 800,
         title,
+        icon: windowIcon,
         ...getTitleBarOptions(),
       },
     });
+
+    // Restore default AppUserModelId for future windows (e.g. main window)
+    app.setAppUserModelId('web-nest');
 
     const nativeWindow = windowManager.getNativeWindow(windowId)!;
     const contentBounds = nativeWindow.getContentBounds();
@@ -133,6 +177,7 @@ export class WebAppService extends WebAppMainApi {
       type: 'embedded',
       preload: paths.getPreloadPath(),
       additionalArguments: buildPreloadArgs({ channelExpose: false }),
+      partition: `persist:webapp-${appId}`,
     });
 
     const view = viewManager.getView(viewId)!;
@@ -145,7 +190,7 @@ export class WebAppService extends WebAppMainApi {
 
     // ── Register all services on titlebar channel ────────────────────────
     // Register BEFORE fetching favicon — service must be available when titlebar renderer mounts
-    const windowService = new WebAppWindowService({ contentView: view });
+    const windowService = new WebAppWindowService({ contentView: view, faviconDataUrl: initialIconDataUrl });
     serviceRegistry.implementService(
       titlebarView.channel,
       themeService,
@@ -153,11 +198,19 @@ export class WebAppService extends WebAppMainApi {
       windowService,
     );
 
-    // Fetch favicon async and backfill into service
-    fetchFaviconDataUrl(faviconUrl).then((dataUrl) => {
+    // Fetch favicon async to refresh cache / update if no cache hit
+    fetchFaviconDataUrl(appId, faviconUrl).then((dataUrl) => {
+      if (!dataUrl || dataUrl === cachedFaviconDataUrl) { return; } // no change
       windowService.updateFaviconDataUrl(dataUrl);
       const wc = view.webContents;
       if (!wc.isDestroyed()) {
+        // Update window taskbar icon with page favicon
+        try {
+          const img = nativeImage.createFromDataURL(dataUrl);
+          if (!img.isEmpty()) {
+            nativeWindow.setIcon(img);
+          }
+        } catch { /* favicon format may not be supported by nativeImage */ }
         const navState = { ...windowService.buildNavState(), faviconDataUrl: dataUrl };
         viewManager.requestTo(titlebarViewId, 'url-changed', navState).catch(() => {
           log.debug('Favicon push failed — titlebar view may be destroyed:', appId);
@@ -234,7 +287,7 @@ export class WebAppService extends WebAppMainApi {
     this.apps.set(appId, entry);
     this.persist();
 
-    const faviconDataUrl = await fetchFaviconDataUrl(faviconUrl);
+    const faviconDataUrl = await fetchFaviconDataUrl(appId, faviconUrl);
 
     log.info('Web app created:', appId, url);
     return { id: appId, url: entry.url, title: entry.title, faviconUrl, faviconDataUrl };
@@ -259,6 +312,12 @@ export class WebAppService extends WebAppMainApi {
     const persisted = loadApps(configDir).filter((a) => a.id !== id);
     saveApps(configDir, persisted);
 
+    // Clear persisted session data (cookies, localStorage, cache, etc.)
+    await this.clearAppSession(id);
+
+    // Clear per-app favicon cache
+    clearAppFaviconCache(id);
+
     log.info('Web app deleted:', id);
   }
 
@@ -274,7 +333,7 @@ export class WebAppService extends WebAppMainApi {
     if (this.apps.has(id)) {
       const existing = this.apps.get(id)!;
       if (this.isEntryAlive(existing)) {
-        const faviconDataUrl = await fetchFaviconDataUrl(existing.faviconUrl);
+        const faviconDataUrl = await fetchFaviconDataUrl(id, existing.faviconUrl);
         return { id: existing.appId, url: existing.url, title: existing.title, faviconUrl: existing.faviconUrl, faviconDataUrl };
       }
       // Stale entry: window/view is closing or already destroyed
@@ -285,7 +344,7 @@ export class WebAppService extends WebAppMainApi {
 
     this.apps.set(id, entry);
 
-    const faviconDataUrl = await fetchFaviconDataUrl(appData.faviconUrl);
+    const faviconDataUrl = await fetchFaviconDataUrl(id, appData.faviconUrl);
 
     log.info('Web app opened:', id);
     return { id, url: entry.url, title: entry.title, faviconUrl: appData.faviconUrl, faviconDataUrl };
@@ -298,7 +357,7 @@ export class WebAppService extends WebAppMainApi {
     const results: WebAppState[] = [];
     for (const app of persisted) {
       const entry = this.apps.get(app.id);
-      const faviconDataUrl = await fetchFaviconDataUrl(app.faviconUrl);
+      const faviconDataUrl = await fetchFaviconDataUrl(app.id, app.faviconUrl);
       if (entry) {
         results.push({ id: entry.appId, url: entry.url, title: entry.title, faviconUrl: entry.faviconUrl, faviconDataUrl });
       } else {
@@ -324,7 +383,7 @@ export class WebAppService extends WebAppMainApi {
         }
       }
       this.persist();
-      const faviconDataUrl = await fetchFaviconDataUrl(entry.faviconUrl);
+      const faviconDataUrl = await fetchFaviconDataUrl(id, entry.faviconUrl);
       return { id: entry.appId, url: entry.url, title: entry.title, faviconUrl: entry.faviconUrl, faviconDataUrl };
     }
 
@@ -345,7 +404,7 @@ export class WebAppService extends WebAppMainApi {
     saveApps(configDir, persisted);
 
     log.info('Web app updated:', id, data);
-    const faviconDataUrl = await fetchFaviconDataUrl(persisted[idx].faviconUrl);
+    const faviconDataUrl = await fetchFaviconDataUrl(id, persisted[idx].faviconUrl);
     return { ...persisted[idx], faviconDataUrl };
   }
 }
