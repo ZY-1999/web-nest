@@ -1,42 +1,42 @@
-import React, { useState } from 'react';
-import { Button } from '@/renderer/components/ui/button';
+import React, { useState } from 'react'
+import { Button } from '@/renderer/components/ui/button'
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/renderer/components/ui/dialog';
-import { useWebAppStore } from '../../stores/webAppStore';
-import { FaviconImg } from '@/renderer/components/FaviconImg';
-import { webAppMainApi } from '@/shared/services';
-import { Plus, MoreVertical, Pencil, Trash2, Pin } from 'lucide-react';
+} from '@/renderer/components/ui/dialog'
+import { useWebAppStore } from '../../stores/webAppStore'
+import { FaviconImg } from '@/renderer/components/FaviconImg'
+import { webAppMainApi } from '@/shared/services'
+import { Plus, MoreVertical, Pencil, Trash2, Pin, PinOff } from 'lucide-react'
 
 function AddDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { addApp } = useWebAppStore();
-  const [url, setUrl] = useState('');
-  const [loading, setLoading] = useState(false);
+  const { addApp } = useWebAppStore()
+  const [url, setUrl] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const handleSubmit = async () => {
-    const trimmed = url.trim();
-    if (!trimmed) { return; }
+    const trimmed = url.trim()
+    if (!trimmed) { return }
 
-    setLoading(true);
+    setLoading(true)
     try {
-      const app = await webAppMainApi.createWebApp(trimmed);
-      addApp(app);
-      setUrl('');
-      onOpenChange(false);
+      const app = await webAppMainApi.createWebApp(trimmed)
+      addApp(app)
+      setUrl('')
+      onOpenChange(false)
     } catch (error) {
-      console.error('Failed to create web app:', error);
+      console.error('Failed to create web app:', error)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') { handleSubmit(); }
-  };
+    if (e.key === 'Enter') { handleSubmit() }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -60,7 +60,7 @@ function AddDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open:
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+  )
 }
 
 function EditDialog({
@@ -68,41 +68,41 @@ function EditDialog({
   open,
   onOpenChange,
 }: {
-  appId: string | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  appId: string | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }) {
-  const { apps, updateApp } = useWebAppStore();
-  const app = apps.find((a) => a.id === appId);
-  const [title, setTitle] = useState('');
-  const [url, setUrl] = useState('');
-  const [loading, setLoading] = useState(false);
+  const { apps, updateApp } = useWebAppStore()
+  const app = apps.find((a) => a.id === appId)
+  const [title, setTitle] = useState('')
+  const [url, setUrl] = useState('')
+  const [loading, setLoading] = useState(false)
 
   React.useEffect(() => {
     if (app && open) {
-      setTitle(app.title);
-      setUrl(app.url);
+      setTitle(app.title)
+      setUrl(app.url)
     }
-  }, [app, open]);
+  }, [app, open])
 
-  if (!app) { return null; }
+  if (!app) { return null }
 
   const handleSave = async () => {
-    setLoading(true);
+    setLoading(true)
     try {
-      const updated = await webAppMainApi.updateWebApp(app.id, { title, url });
-      updateApp(app.id, updated);
-      onOpenChange(false);
+      const updated = await webAppMainApi.updateWebApp(app.id, { title, url })
+      updateApp(app.id, updated)
+      onOpenChange(false)
     } catch (error) {
-      console.error('Failed to update web app:', error);
+      console.error('Failed to update web app:', error)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') { handleSave(); }
-  };
+    if (e.key === 'Enter') { handleSave() }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -140,7 +140,7 @@ function EditDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+  )
 }
 
 function AppCard({
@@ -148,27 +148,47 @@ function AppCard({
   onOpen,
   onEdit,
   onDelete,
-  onCreateShortcut,
 }: {
-  app: { id: string; url: string; title: string; faviconDataUrl?: string };
-  onOpen: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  onCreateShortcut: () => void;
+  app: { id: string; url: string; title: string; faviconDataUrl?: string }
+  onOpen: () => void
+  onEdit: () => void
+  onDelete: () => void
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const cardRef = React.useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [shortcutExists, setShortcutExists] = useState(false)
+  const cardRef = React.useRef<HTMLDivElement>(null)
+
+  // Check shortcut status when menu opens
+  React.useEffect(() => {
+    if (!menuOpen) { return }
+    webAppMainApi.hasShortcut(app.id).then(setShortcutExists).catch(() => {})
+  }, [menuOpen, app.id])
 
   React.useEffect(() => {
-    if (!menuOpen) { return; }
+    if (!menuOpen) { return }
     const handler = (e: MouseEvent) => {
       if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
+        setMenuOpen(false)
       }
-    };
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, [menuOpen]);
+    }
+    document.addEventListener('click', handler)
+    return () => document.removeEventListener('click', handler)
+  }, [menuOpen])
+
+  const handleToggleShortcut = async () => {
+    setMenuOpen(false)
+    try {
+      if (shortcutExists) {
+        await webAppMainApi.removeShortcut(app.id)
+        setShortcutExists(false)
+      } else {
+        await webAppMainApi.createShortcut(app.id)
+        setShortcutExists(true)
+      }
+    } catch (error) {
+      console.error('Failed to toggle shortcut:', error)
+    }
+  }
 
   return (
     <div
@@ -190,8 +210,8 @@ function AppCard({
       {/* Hover menu trigger */}
       <button
         onClick={(e) => {
-          e.stopPropagation();
-          setMenuOpen(!menuOpen);
+          e.stopPropagation()
+          setMenuOpen(!menuOpen)
         }}
         className="absolute top-1 right-1 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent"
         data-testid="webapp-menu-btn"
@@ -206,7 +226,7 @@ function AppCard({
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            onClick={() => { setMenuOpen(false); onEdit(); }}
+            onClick={() => { setMenuOpen(false); onEdit() }}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
             data-testid="webapp-edit-btn"
           >
@@ -214,15 +234,15 @@ function AppCard({
             Edit
           </button>
           <button
-            onClick={() => { setMenuOpen(false); onCreateShortcut(); }}
+            onClick={handleToggleShortcut}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
-            data-testid="webapp-shortcut-btn"
+            data-testid={shortcutExists ? 'webapp-remove-shortcut-btn' : 'webapp-shortcut-btn'}
           >
-            <Pin className="h-3.5 w-3.5" />
-            Create Shortcut
+            {shortcutExists ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+            {shortcutExists ? 'Remove Shortcut' : 'Create Shortcut'}
           </button>
           <button
-            onClick={() => { setMenuOpen(false); onDelete(); }}
+            onClick={() => { setMenuOpen(false); onDelete() }}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-red-500 hover:bg-accent"
             data-testid="webapp-delete-btn"
           >
@@ -232,42 +252,34 @@ function AppCard({
         </div>
       )}
     </div>
-  );
+  )
 }
 
 export function WebCatalog() {
-  const { apps, setApps, removeApp } = useWebAppStore();
-  const [addOpen, setAddOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
+  const { apps, setApps, removeApp } = useWebAppStore()
+  const [addOpen, setAddOpen] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
 
   React.useEffect(() => {
-    webAppMainApi.listWebApps().then(setApps);
-  }, []);
+    webAppMainApi.listWebApps().then(setApps)
+  }, [])
 
   const handleOpen = async (id: string) => {
     try {
-      await webAppMainApi.openWebApp(id);
+      await webAppMainApi.openWebApp(id)
     } catch (error) {
-      console.error('Failed to open web app:', error);
+      console.error('Failed to open web app:', error)
     }
-  };
+  }
 
   const handleDelete = async (id: string) => {
     try {
-      await webAppMainApi.deleteWebApp(id);
-      removeApp(id);
+      await webAppMainApi.deleteWebApp(id)
+      removeApp(id)
     } catch (error) {
-      console.error('Failed to delete web app:', error);
+      console.error('Failed to delete web app:', error)
     }
-  };
-
-  const handleCreateShortcut = async (id: string) => {
-    try {
-      await webAppMainApi.createShortcut(id);
-    } catch (error) {
-      console.error('Failed to create shortcut:', error);
-    }
-  };
+  }
 
   return (
     <div className="flex-1 overflow-auto bg-background p-8 pt-2">
@@ -280,7 +292,6 @@ export function WebCatalog() {
             onOpen={() => handleOpen(app.id)}
             onEdit={() => setEditId(app.id)}
             onDelete={() => handleDelete(app.id)}
-            onCreateShortcut={() => handleCreateShortcut(app.id)}
           />
         ))}
 
@@ -301,7 +312,7 @@ export function WebCatalog() {
       )}
 
       <AddDialog open={addOpen} onOpenChange={setAddOpen} />
-      <EditDialog appId={editId} open={editId !== null} onOpenChange={(open) => { if (!open) { setEditId(null); } }} />
+      <EditDialog appId={editId} open={editId !== null} onOpenChange={(open) => { if (!open) { setEditId(null) } }} />
     </div>
-  );
+  )
 }

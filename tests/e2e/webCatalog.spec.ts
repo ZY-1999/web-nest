@@ -187,3 +187,90 @@ test('clicking card after close reopens app window', async ({ electronApp, mainP
     expect(electronApp.windows().length).toBeGreaterThanOrEqual(2);
   }).toPass({ timeout: 10000 });
 });
+
+test('hover menu shows create shortcut button', async ({ electronApp }) => {
+  const mainWindow = await waitForWindowReady(electronApp);
+
+  // Create a web app
+  await mainWindow.locator('[data-testid="add-card-btn"]').click();
+  const addDialog = mainWindow.locator('[role="dialog"]');
+  await expect(addDialog).toBeVisible();
+  await addDialog.locator('[data-testid="add-url-input"]').fill('about:blank');
+  await expect(addDialog.locator('[data-testid="add-submit"]')).toBeEnabled();
+  await addDialog.locator('[data-testid="add-submit"]').click();
+
+  const card = mainWindow.locator('[data-testid="webapp-card"]');
+  await expect(card).toBeVisible({ timeout: 10000 });
+
+  // Hover to show menu
+  await card.hover();
+  await card.locator('[data-testid="webapp-menu-btn"]').click();
+
+  // Create Shortcut button should be visible
+  const shortcutBtn = card.locator('[data-testid="webapp-shortcut-btn"]');
+  await expect(shortcutBtn).toBeVisible();
+  await expect(shortcutBtn).toHaveText('Create Shortcut');
+});
+
+test('clicking create shortcut toggles to remove shortcut', async ({ electronApp }) => {
+  const mainWindow = await waitForWindowReady(electronApp);
+
+  // Create a web app
+  await mainWindow.locator('[data-testid="add-card-btn"]').click();
+  const addDialog = mainWindow.locator('[role="dialog"]');
+  await expect(addDialog).toBeVisible();
+  await addDialog.locator('[data-testid="add-url-input"]').fill('about:blank');
+  await expect(addDialog.locator('[data-testid="add-submit"]')).toBeEnabled();
+  await addDialog.locator('[data-testid="add-submit"]').click();
+
+  const card = mainWindow.locator('[data-testid="webapp-card"]');
+  await expect(card).toBeVisible({ timeout: 10000 });
+
+  // Hover → menu → click Create Shortcut
+  await card.hover();
+  await card.locator('[data-testid="webapp-menu-btn"]').click();
+  const shortcutBtn = card.locator('[data-testid="webapp-shortcut-btn"]');
+  await expect(shortcutBtn).toBeVisible();
+  await shortcutBtn.click();
+
+  // Reopen menu and verify Remove Shortcut is shown
+  await card.hover();
+  await card.locator('[data-testid="webapp-menu-btn"]').click();
+  const removeBtn = card.locator('[data-testid="webapp-remove-shortcut-btn"]');
+  await expect(removeBtn).toBeVisible({ timeout: 10000 });
+  await expect(removeBtn).toHaveText('Remove Shortcut');
+});
+
+test('clicking remove shortcut toggles back to create', async ({ electronApp }) => {
+  const mainWindow = await waitForWindowReady(electronApp);
+
+  // Create a web app
+  await mainWindow.locator('[data-testid="add-card-btn"]').click();
+  const addDialog = mainWindow.locator('[role="dialog"]');
+  await expect(addDialog).toBeVisible();
+  await addDialog.locator('[data-testid="add-url-input"]').fill('about:blank');
+  await expect(addDialog.locator('[data-testid="add-submit"]')).toBeEnabled();
+  await addDialog.locator('[data-testid="add-submit"]').click();
+
+  const card = mainWindow.locator('[data-testid="webapp-card"]');
+  await expect(card).toBeVisible({ timeout: 10000 });
+
+  // Create shortcut first
+  await card.hover();
+  await card.locator('[data-testid="webapp-menu-btn"]').click();
+  await card.locator('[data-testid="webapp-shortcut-btn"]').click();
+
+  // Reopen menu → click Remove Shortcut
+  await card.hover();
+  await card.locator('[data-testid="webapp-menu-btn"]').click();
+  const removeBtn = card.locator('[data-testid="webapp-remove-shortcut-btn"]');
+  await expect(removeBtn).toBeVisible({ timeout: 10000 });
+  await removeBtn.click();
+
+  // Reopen menu → Create Shortcut should be back
+  await card.hover();
+  await card.locator('[data-testid="webapp-menu-btn"]').click();
+  const shortcutBtn = card.locator('[data-testid="webapp-shortcut-btn"]');
+  await expect(shortcutBtn).toBeVisible({ timeout: 10000 });
+  await expect(shortcutBtn).toHaveText('Create Shortcut');
+});

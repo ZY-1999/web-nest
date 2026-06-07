@@ -39,7 +39,7 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', (_event, argv) => {
+  app.on('second-instance', async (_event, argv) => {
     const secondAppId = parseOpenAppArg(argv);
     if (secondAppId) {
       webAppService.openWebApp(secondAppId).catch((err) => {
@@ -49,6 +49,11 @@ if (!gotTheLock) {
       const mainWin = windowManager.getWindow('main');
       if (mainWin) {
         mainWin.show();
+      } else {
+        // No main window (shortcut mode) — create one for the user
+        await createMainWindow();
+        appTray.create();
+        registerMainServices();
       }
     }
   });

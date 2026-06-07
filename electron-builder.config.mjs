@@ -22,6 +22,10 @@ export default {
       from: 'build/icons/tray',
       to: 'icons/tray',
     },
+    {
+      from: 'build/icons/app',
+      to: 'icons/app',
+    },
   ],
   win: {
     target: [

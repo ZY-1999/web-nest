@@ -19,6 +19,7 @@ export abstract class WebAppMainApi {
   abstract getFavicon(id: string): Promise<string>;
   abstract createShortcut(id: string): Promise<void>;
   abstract removeShortcut(id: string): Promise<void>;
+  abstract hasShortcut(id: string): Promise<boolean>;
 }
 
 export const webAppMainApi = serviceRegistry.defineApi(WebAppMainApi, 'main');
