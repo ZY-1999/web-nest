@@ -9,7 +9,7 @@ import {
 } from '@/renderer/components/ui/dialog';
 import { useWebAppStore } from '../../stores/webAppStore';
 import { webAppMainApi } from '@/shared/services';
-import { Plus, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { Plus, MoreVertical, Pencil, Trash2, Pin } from 'lucide-react';
 
 function AddDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { addApp } = useWebAppStore();
@@ -147,11 +147,13 @@ function AppCard({
   onOpen,
   onEdit,
   onDelete,
+  onCreateShortcut,
 }: {
   app: { id: string; url: string; title: string; faviconDataUrl?: string };
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onCreateShortcut: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const cardRef = React.useRef<HTMLDivElement>(null);
@@ -217,6 +219,14 @@ function AppCard({
             Edit
           </button>
           <button
+            onClick={() => { setMenuOpen(false); onCreateShortcut(); }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
+            data-testid="webapp-shortcut-btn"
+          >
+            <Pin className="h-3.5 w-3.5" />
+            Create Shortcut
+          </button>
+          <button
             onClick={() => { setMenuOpen(false); onDelete(); }}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-red-500 hover:bg-accent"
             data-testid="webapp-delete-btn"
@@ -256,6 +266,14 @@ export function WebCatalog() {
     }
   };
 
+  const handleCreateShortcut = async (id: string) => {
+    try {
+      await webAppMainApi.createShortcut(id);
+    } catch (error) {
+      console.error('Failed to create shortcut:', error);
+    }
+  };
+
   return (
     <div className="flex-1 overflow-auto bg-background p-8 pt-2">
       <h1 className="sr-only">Web Catalog</h1>
@@ -267,6 +285,7 @@ export function WebCatalog() {
             onOpen={() => handleOpen(app.id)}
             onEdit={() => setEditId(app.id)}
             onDelete={() => handleDelete(app.id)}
+            onCreateShortcut={() => handleCreateShortcut(app.id)}
           />
         ))}
 

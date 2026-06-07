@@ -21,8 +21,10 @@ export function WebAppTitleBar() {
     let cancelled = false;
 
     const fetchState = async () => {
-      for (let attempt = 0; attempt < 10; attempt++) {
-        if (cancelled) { return; }
+      for (let attempt = 0; attempt < 20; attempt++) {
+        if (cancelled) {
+          return;
+        }
         try {
           const state = await webAppWindowApi.getNavState();
           if (state.url) {
@@ -37,7 +39,9 @@ export function WebAppTitleBar() {
     };
 
     fetchState();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Listen for URL change pushes from main process

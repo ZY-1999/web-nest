@@ -11,6 +11,7 @@ import { paths } from '@/main/utils/paths';
 import { loadApps, saveApps } from '@/main/services/appConfigService';
 import { fetchFaviconDataUrl, getCachedFaviconDataUrlSync, clearAppFaviconCache } from '@/main/services/faviconService';
 import { buildPreloadArgs } from '@/shared/preload/args';
+import { createDesktopShortcut, removeDesktopShortcut } from '@/main/services/shortcutService';
 import { isDev } from '@/shared/utils/env';
 import { getTitleBarOptions, WEBAPP_TITLEBAR_HEIGHT } from '@/shared/titlebar';
 import { serviceRegistry } from '@/shared/serviceRegistry';
@@ -307,6 +308,9 @@ export class WebAppService extends WebAppMainApi {
       this.destroyEntry(entry);
     }
 
+    // Remove desktop shortcut
+    removeDesktopShortcut(id);
+
     // Remove from persisted storage
     const configDir = this.getConfigDir();
     const persisted = loadApps(configDir).filter((a) => a.id !== id);
@@ -406,6 +410,22 @@ export class WebAppService extends WebAppMainApi {
     log.info('Web app updated:', id, data);
     const faviconDataUrl = await fetchFaviconDataUrl(id, persisted[idx].faviconUrl);
     return { ...persisted[idx], faviconDataUrl };
+  }
+
+  async createShortcut(id: string): Promise<void> {
+    const configDir = this.getConfigDir();
+    const persisted = loadApps(configDir);
+    const appData = persisted.find((a) => a.id === id);
+    if (!appData) {
+      throw new Error(`Web app not found: ${id}`);
+    }
+    createDesktopShortcut(id, appData.title);
+    log.info('Shortcut created for:', id);
+  }
+
+  async removeShortcut(id: string): Promise<void> {
+    removeDesktopShortcut(id);
+    log.info('Shortcut removed for:', id);
   }
 }
 
