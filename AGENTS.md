@@ -71,6 +71,7 @@
 ### 关键设计模式
 
 - **`@Singleton()` 装饰器** (`src/shared/utils/singleton.ts`): 进程内单例，支持按进程类型限制
+- **Service Export 统一约定** (`当前约定`): 所有 service 使用 `class + export const xxService = new XxxService()` 模式导出，消费方通过 `xxService.method()` 调用。per-view service（如 `WebAppWindowService`）保持 class export 不变
 - **`Channel` 类** (`src/shared/channel/`): MessagePort IPC 封装，类型安全双向通信
 - **`ServiceRegistry`** (`src/shared/serviceRegistry/`): 服务注册/发现/RPC，`defineApi()` + `implementService()`
 - **`WindowManager`** (`src/main/windowManager/`): 多窗口生命周期，macOS 关闭隐藏到托盘
