@@ -1,6 +1,7 @@
 import { serviceRegistry } from '@/shared/serviceRegistry';
 
 export interface NavigationState {
+  appId?: string;
   url: string;
   title: string;
   faviconDataUrl?: string;

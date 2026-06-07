@@ -57,7 +57,7 @@ export function WebAppTitleBar() {
 
   return (
     <div className="webapp-titlebar" data-testid="webapp-titlebar">
-      <TitleRow faviconDataUrl={navState.faviconDataUrl} title={navState.title} />
+      <TitleRow appId={navState.appId} title={navState.title} />
       <NavRow navState={navState} onNavStateChange={setNavState} />
     </div>
   );

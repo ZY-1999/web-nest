@@ -3,6 +3,7 @@ import { WebAppWindowApi, type NavigationState } from '@/shared/services/webAppW
 import type { ManagedView } from '@/main/viewManager/managedView';
 
 interface WebAppWindowContext {
+  appId: string;
   contentView: ManagedView;
   faviconDataUrl?: string;
 }
@@ -51,9 +52,10 @@ export class WebAppWindowService extends WebAppWindowApi {
   buildNavState(): NavigationState {
     const wc = this.context.contentView.webContents;
     if (wc.isDestroyed()) {
-      return { url: '', title: '', canGoBack: false, canGoForward: false };
+      return { appId: this.context.appId, url: '', title: '', canGoBack: false, canGoForward: false };
     }
     return {
+      appId: this.context.appId,
       url: wc.getURL(),
       title: wc.getTitle(),
       faviconDataUrl: this.context.faviconDataUrl,

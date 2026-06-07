@@ -191,7 +191,7 @@ export class WebAppService extends WebAppMainApi {
 
     // ── Register all services on titlebar channel ────────────────────────
     // Register BEFORE fetching favicon — service must be available when titlebar renderer mounts
-    const windowService = new WebAppWindowService({ contentView: view, faviconDataUrl: initialIconDataUrl });
+    const windowService = new WebAppWindowService({ appId, contentView: view, faviconDataUrl: initialIconDataUrl });
     serviceRegistry.implementService(
       titlebarView.channel,
       themeService,

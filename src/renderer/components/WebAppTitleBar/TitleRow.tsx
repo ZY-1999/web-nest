@@ -2,15 +2,15 @@ import { ThemeToggle } from '../ThemeToggle';
 import { FaviconImg } from '@/renderer/components/FaviconImg';
 
 interface TitleRowProps {
-  faviconDataUrl?: string;
+  appId?: string;
   title: string;
 }
 
-export function TitleRow({ faviconDataUrl, title }: TitleRowProps) {
+export function TitleRow({ appId, title }: TitleRowProps) {
   return (
     <div className="titlebar-row-1" data-testid="titlebar-row-1">
       <div className="titlebar-row-1-left">
-        <FaviconImg faviconDataUrl={faviconDataUrl} />
+        <FaviconImg appId={appId} fallback={title} size="sm" />
       </div>
       <div className="titlebar-row-1-center" data-testid="titlebar-title">
         {title}

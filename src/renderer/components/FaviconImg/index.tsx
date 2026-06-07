@@ -1,6 +1,21 @@
 import React from 'react';
 import { useFaviconStore } from '@/renderer/stores/faviconStore';
 
+const sizeClasses = {
+  sm: {
+    container: 'h-4 w-4',
+    img: 'h-4 w-4 rounded-sm',
+    spinner: 'h-3 w-3',
+    fallback: 'h-4 w-4 text-[10px]',
+  },
+  md: {
+    container: 'h-6 w-6',
+    img: 'h-6 w-6 rounded',
+    spinner: 'h-4 w-4',
+    fallback: 'h-6 w-6 text-xs',
+  },
+} as const;
+
 interface FaviconImgProps {
   /** App ID mode — uses faviconStore for polling (catalog cards) */
   appId?: string;
@@ -8,9 +23,13 @@ interface FaviconImgProps {
   faviconDataUrl?: string;
   /** Fallback text (e.g. app title) for first-letter display */
   fallback?: string;
+  /** Icon size: 'sm' (16×16, titlebar) or 'md' (24×24, catalog). Default: 'md' */
+  size?: 'sm' | 'md';
 }
 
-export function FaviconImg({ appId, faviconDataUrl, fallback }: FaviconImgProps) {
+export function FaviconImg({ appId, faviconDataUrl, fallback, size = 'md' }: FaviconImgProps) {
+  const cls = sizeClasses[size];
+
   // appId mode: use faviconStore
   const storeState = useFaviconStore(
     (s) => (appId ? s.favicons[appId] : undefined),
@@ -30,7 +49,7 @@ export function FaviconImg({ appId, faviconDataUrl, fallback }: FaviconImgProps)
       <img
         src={faviconDataUrl}
         alt=""
-        className="h-4 w-4 rounded-sm"
+        className={cls.img}
         draggable={false}
         data-testid="favicon-image"
       />
@@ -39,7 +58,7 @@ export function FaviconImg({ appId, faviconDataUrl, fallback }: FaviconImgProps)
 
   if (!appId) {
     // No data at all
-    return <Fallback fallback={fallback} />;
+    return <Fallback fallback={fallback} cls={cls} />;
   }
 
   // appId mode — check store state
@@ -48,31 +67,32 @@ export function FaviconImg({ appId, faviconDataUrl, fallback }: FaviconImgProps)
       <img
         src={storeState.dataUrl}
         alt=""
-        className="h-6 w-6 rounded"
+        className={cls.img}
+        draggable={false}
         data-testid="favicon-image"
       />
     );
   }
 
   // Loading
-  return <Spinner />;
+  return <Spinner cls={cls} />;
 }
 
-function Spinner() {
+function Spinner({ cls }: { cls: (typeof sizeClasses)[keyof typeof sizeClasses] }) {
   return (
     <div
-      className="h-6 w-6 flex items-center justify-center"
+      className={`${cls.container} flex items-center justify-center`}
       data-testid="favicon-spinner"
     >
-      <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+      <div className={`${cls.spinner} animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground`} />
     </div>
   );
 }
 
-function Fallback({ fallback }: { fallback?: string }) {
+function Fallback({ fallback, cls }: { fallback?: string; cls: (typeof sizeClasses)[keyof typeof sizeClasses] }) {
   return (
     <span
-      className="h-6 w-6 flex items-center justify-center text-xs font-bold text-gray-500"
+      className={`${cls.fallback} flex items-center justify-center font-bold text-gray-500`}
       data-testid="favicon-fallback"
     >
       {fallback?.charAt(0).toUpperCase() ?? ''}
