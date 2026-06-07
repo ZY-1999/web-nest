@@ -17,6 +17,7 @@ import { getTitleBarOptions, WEBAPP_TITLEBAR_HEIGHT } from '@/shared/titlebar';
 import { serviceRegistry } from '@/shared/serviceRegistry';
 import { themeService } from '@/main/services/themeService';
 import { WebAppWindowService } from '@/main/services/webAppWindowService';
+import { debounce } from '@/main/utils/debounce';
 
 const log = logger(__SOURCE_FILE__);
 
@@ -256,23 +257,25 @@ export class WebAppService extends WebAppMainApi {
     view.webContents.on('did-navigate', pushNavState);
     view.webContents.on('did-navigate-in-page', pushNavState);
 
-    // Track page favicon updates — use real favicon from page instead of Google service
-    view.webContents.on('page-favicon-updated', (_event: Electron.Event, urls: string[]) => {
-      if (!urls.length || view.webContents.isDestroyed()) { return; }
-      const realFaviconUrl = urls[0];
-      log.info('Page favicon updated:', appId, realFaviconUrl);
-      fetchFaviconDataUrl(appId, realFaviconUrl).then((dataUrl) => {
+    // Track page favicon updates — debounce: only fetch the last URL in a burst
+    const onFaviconUpdated = debounce((urls: string[]) => {
+      if (view.webContents.isDestroyed()) { return; }
+      log.info('Page favicon updated:', appId, urls[0]);
+      fetchFaviconDataUrl(appId, urls[0]).then((dataUrl) => {
         if (!dataUrl) { return; }
-        // Update titlebar favicon
         windowService.updateFaviconDataUrl(dataUrl);
         const navState = { ...windowService.buildNavState(), faviconDataUrl: dataUrl };
         viewManager.requestTo(titlebarViewId, 'url-changed', navState).catch(() => {});
-        // Update window taskbar icon
         try {
           const img = nativeImage.createFromDataURL(dataUrl);
           if (!img.isEmpty()) { nativeWindow.setIcon(img); }
         } catch { /* favicon format may not be supported by nativeImage */ }
       });
+    }, 100);
+
+    view.webContents.on('page-favicon-updated', (_event: Electron.Event, urls: string[]) => {
+      if (!urls.length || view.webContents.isDestroyed()) { return; }
+      onFaviconUpdated(urls);
     });
 
     // Cleanup on window close — use 'close' event (synchronous) to mark entry,

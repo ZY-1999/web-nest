@@ -35,7 +35,9 @@ export function FaviconImg({ appId, faviconDataUrl, fallback, size = 'md' }: Fav
     (s) => (appId ? s.favicons[appId] : undefined),
   );
 
-  // Request favicon on mount in appId mode
+  // Request favicon on mount in appId mode.
+  // No cleanup needed: requestFavicon is idempotent (guards against loading/loaded),
+  // and polling lifecycle is managed entirely by the store.
   React.useEffect(() => {
     if (appId) {
       useFaviconStore.getState().requestFavicon(appId);
@@ -72,6 +74,11 @@ export function FaviconImg({ appId, faviconDataUrl, fallback, size = 'md' }: Fav
         data-testid="favicon-image"
       />
     );
+  }
+
+  // Fetch failed after max retries — show fallback
+  if (storeState?.status === 'error') {
+    return <Fallback fallback={fallback} cls={cls} />;
   }
 
   // Loading

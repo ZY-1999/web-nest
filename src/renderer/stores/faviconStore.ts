@@ -1,15 +1,19 @@
 import { create } from 'zustand';
 import { webAppMainApi } from '@/shared/services';
 
+const MAX_RETRIES = 10; // 10 × 2s = 20s max wait before giving up
+
 interface FaviconState {
-  status: 'loading' | 'loaded';
+  status: 'loading' | 'loaded' | 'error';
   dataUrl?: string;
+  retryCount: number;
 }
 
 interface FaviconStore {
   favicons: Record<string, FaviconState>;
   requestFavicon: (appId: string) => void;
   setLoaded: (appId: string, dataUrl: string) => void;
+  failRetry: (appId: string) => void;
   dispose: () => void;
 }
 
@@ -32,10 +36,12 @@ function startPolling() {
       try {
         const dataUrl = await webAppMainApi.getFavicon(id);
         if (dataUrl) {
-          state.setLoaded(id, dataUrl);
+          useFaviconStore.getState().setLoaded(id, dataUrl);
+        } else {
+          useFaviconStore.getState().failRetry(id);
         }
       } catch {
-        // IPC may fail during app shutdown; ignore
+        useFaviconStore.getState().failRetry(id);
       }
     }
   }, 2000);
@@ -53,11 +59,12 @@ export const useFaviconStore = create<FaviconStore>((set, get) => ({
 
   requestFavicon(appId: string) {
     const current = get().favicons[appId];
-    if (current?.status === 'loaded') { return; }
+    // Skip if already loaded or actively loading (polling handles retries)
+    if (current?.status === 'loaded' || current?.status === 'loading') { return; }
 
-    // Mark as loading immediately
+    // Mark as loading immediately (also resets from error state)
     set((state) => ({
-      favicons: { ...state.favicons, [appId]: { status: 'loading' } },
+      favicons: { ...state.favicons, [appId]: { status: 'loading', retryCount: 0 } },
     }));
 
     // Immediate IPC call for fast cache hit
@@ -76,8 +83,23 @@ export const useFaviconStore = create<FaviconStore>((set, get) => ({
 
   setLoaded(appId: string, dataUrl: string) {
     set((state) => ({
-      favicons: { ...state.favicons, [appId]: { status: 'loaded', dataUrl } },
+      favicons: { ...state.favicons, [appId]: { status: 'loaded', dataUrl, retryCount: 0 } },
     }));
+  },
+
+  failRetry(appId: string) {
+    const current = get().favicons[appId];
+    if (!current || current.status !== 'loading') { return; }
+    const newCount = current.retryCount + 1;
+    if (newCount >= MAX_RETRIES) {
+      set((state) => ({
+        favicons: { ...state.favicons, [appId]: { status: 'error', dataUrl: undefined, retryCount: newCount } },
+      }));
+    } else {
+      set((state) => ({
+        favicons: { ...state.favicons, [appId]: { ...state.favicons[appId], retryCount: newCount } },
+      }));
+    }
   },
 
   dispose() {
