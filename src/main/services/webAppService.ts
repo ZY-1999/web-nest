@@ -66,17 +66,22 @@ export class WebAppService extends WebAppMainApi {
     return this.configDirCache;
   }
 
-  private getPersistedApps() {
-    return Array.from(this.apps.values()).map((e) => ({
-      id: e.appId,
-      url: e.url,
-      title: e.title,
-      faviconUrl: e.faviconUrl,
-    }));
-  }
-
   private persist() {
-    appConfigService.saveApps(this.getConfigDir(), this.getPersistedApps());
+    const configDir = this.getConfigDir();
+    const persisted = appConfigService.loadApps(configDir);
+    const persistedMap = new Map(persisted.map((p) => [p.id, p]));
+
+    // Merge: update/add open apps, keep closed apps intact
+    for (const entry of this.apps.values()) {
+      persistedMap.set(entry.appId, {
+        id: entry.appId,
+        url: entry.url,
+        title: entry.title,
+        faviconUrl: entry.faviconUrl,
+      });
+    }
+
+    appConfigService.saveApps(configDir, Array.from(persistedMap.values()));
   }
 
   /** Destroy content view + titlebar view + window resources for an in-memory entry. */
@@ -175,9 +180,6 @@ export class WebAppService extends WebAppMainApi {
       },
     });
 
-    // Restore default AppUserModelId for future windows (e.g. main window)
-    app.setAppUserModelId('web-nest');
-
     const nativeWindow = windowManager.getNativeWindow(windowId)!;
     const contentBounds = nativeWindow.getContentBounds();
 
@@ -206,7 +208,11 @@ export class WebAppService extends WebAppMainApi {
     );
 
     // Window appears with views already loaded — no blank flash
+    // Show BEFORE restoring AppUserModelId so Windows registers the unique taskbar icon
     nativeWindow.show();
+
+    // Restore default AppUserModelId for future windows (e.g. main window)
+    app.setAppUserModelId('web-nest');
 
     // Fetch favicon async to refresh cache / update if no cache hit
     faviconService.fetchFaviconDataUrl(appId, faviconUrl).then((dataUrl) => {
@@ -379,10 +385,16 @@ export class WebAppService extends WebAppMainApi {
       throw new Error(i18nService.t('errors.webAppNotFound', { id }));
     }
 
-    // If already open and alive, just return
+    // If already open and alive, focus the existing window and return
     if (this.apps.has(id)) {
       const existing = this.apps.get(id)!;
       if (this.isEntryAlive(existing)) {
+        const nativeWin = windowManager.getNativeWindow(existing.windowId);
+        if (nativeWin && !nativeWin.isDestroyed()) {
+          if (nativeWin.isMinimized()) { nativeWin.restore(); }
+          nativeWin.show();
+          nativeWin.focus();
+        }
         const faviconDataUrl = faviconService.getCachedFaviconDataUrlSync(id) ?? '';
         // Trigger async refresh for uncached (fire-and-forget)
         if (!faviconDataUrl) {

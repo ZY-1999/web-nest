@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { WebAppMainApi } from '@/shared/services';
+import { appConfigService } from '@/main/services/appConfigService';
+import { paths } from '@/main/utils/paths';
 
 describe('WebAppService integration', () => {
   let webAppService: WebAppMainApi;
 
   beforeEach(async () => {
+    // Clear persisted apps to prevent cross-test pollution
+    appConfigService.saveApps(paths.getConfigDir(), []);
+
     vi.resetModules();
     const { i18nService } = await import('@/main/services/i18nService');
     i18nService.init();
