@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Sun, Moon } from 'lucide-react';
 import { Button } from '@/renderer/components/ui/button';
 import { themeApi } from '@/shared/services/themeApi';
@@ -6,6 +7,7 @@ import { applyThemeToRoot } from '@/shared/theme';
 import type { ThemeMode } from '@/shared/theme';
 
 export function ThemeToggle() {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<ThemeMode>('light');
 
   const toggle = async () => {
@@ -25,7 +27,7 @@ export function ThemeToggle() {
       size="icon"
       onClick={toggle}
       className="h-7 w-7 outline-none focus-visible:ring-0"
-      aria-label="Toggle theme"
+      aria-label={t('titlebar.toggleTheme')}
       data-testid="theme-toggle"
     >
       {mode === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}

@@ -1,4 +1,5 @@
 import { ArrowLeft, ArrowRight, RefreshCw, Copy } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { NavigationState } from '@/shared/services/webAppWindowApi';
 import { webAppWindowApi } from '@/shared/services/webAppWindowApi';
 
@@ -8,6 +9,8 @@ interface NavRowProps {
 }
 
 export function NavRow({ navState, onNavStateChange }: NavRowProps) {
+  const { t } = useTranslation();
+
   const handleBack = async () => {
     await webAppWindowApi.navigateBack();
     const state = await webAppWindowApi.getNavState();
@@ -36,7 +39,7 @@ export function NavRow({ navState, onNavStateChange }: NavRowProps) {
         className="titlebar-nav-btn"
         onClick={handleBack}
         disabled={!navState.canGoBack}
-        title="后退"
+        title={t('titlebar.back')}
         data-testid="nav-back"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -45,7 +48,7 @@ export function NavRow({ navState, onNavStateChange }: NavRowProps) {
         className="titlebar-nav-btn"
         onClick={handleForward}
         disabled={!navState.canGoForward}
-        title="前进"
+        title={t('titlebar.forward')}
         data-testid="nav-forward"
       >
         <ArrowRight className="h-4 w-4" />
@@ -53,7 +56,7 @@ export function NavRow({ navState, onNavStateChange }: NavRowProps) {
       <button
         className="titlebar-nav-btn"
         onClick={handleReload}
-        title="刷新"
+        title={t('titlebar.refresh')}
         data-testid="nav-reload"
       >
         <RefreshCw className="h-4 w-4" />
@@ -64,7 +67,7 @@ export function NavRow({ navState, onNavStateChange }: NavRowProps) {
       <button
         className="titlebar-nav-btn"
         onClick={handleCopy}
-        title="复制 URL"
+        title={t('titlebar.copyUrl')}
         data-testid="nav-copy"
       >
         <Copy className="h-4 w-4" />

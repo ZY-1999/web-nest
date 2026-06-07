@@ -35,10 +35,12 @@
     "clsx": "^2.1.1",
     "electron-log": "~5.2.0",
     "electron-updater": "~6.8.3",
+    "i18next": "^26.3.1",
     "lucide-react": "^1.7.0",
     "native": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-i18next": "^17.0.8",
     "tailwind-merge": "^3.5.0",
     "zustand": "^5.0.12"
   },

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from '@/shared/utils/log';
 import { paths } from '@/main/utils/paths';
+import { i18nService } from '@/main/services/i18nService';
 
 const log = logger(__SOURCE_FILE__);
 
@@ -96,7 +97,7 @@ class ShortcutService {
     const success = shell.writeShortcutLink(linkPath, 'create', {
       target: process.execPath,
       args: `--open-app=${appId}`,
-      description: `Open ${title} in Web Nest`,
+      description: i18nService.t('errors.shortcutDescription', { title }),
       icon: iconPath,
       iconIndex: 0,
       appUserModelId: `web-nest.webapp-${appId}`,

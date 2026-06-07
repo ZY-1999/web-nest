@@ -1,0 +1,39 @@
+{
+  "catalog": {
+    "addWebApp": "Add Web App",
+    "enterUrl": "Enter URL (e.g. https://example.com)",
+    "opening": "Opening...",
+    "open": "Open",
+    "editWebApp": "Edit Web App",
+    "title": "Title",
+    "url": "URL",
+    "saving": "Saving...",
+    "save": "Save",
+    "edit": "Edit",
+    "delete": "Delete",
+    "createShortcut": "Create Shortcut",
+    "removeShortcut": "Remove Shortcut",
+    "add": "Add",
+    "emptyMessage": "No web apps. Click + to add one.",
+    "webCatalog": "Web Catalog"
+  },
+  "titlebar": {
+    "appName": "web-nest",
+    "toggleTheme": "Toggle theme",
+    "back": "Back",
+    "forward": "Forward",
+    "refresh": "Refresh",
+    "copyUrl": "Copy URL"
+  },
+  "tray": {
+    "show": "Show",
+    "hide": "Hide",
+    "quit": "Quit"
+  },
+  "errors": {
+    "webAppNotFound": "Web app not found: {{id}}",
+    "shortcutNotSupported": "Desktop shortcuts are only supported on Windows",
+    "failedToOpenApp": "Failed to open app: {{id}}",
+    "shortcutDescription": "Open {{title}} in Web Nest"
+  }
+}

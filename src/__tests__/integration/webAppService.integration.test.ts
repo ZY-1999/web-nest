@@ -6,6 +6,8 @@ describe('WebAppService integration', () => {
 
   beforeEach(async () => {
     vi.resetModules();
+    const { i18nService } = await import('@/main/services/i18nService');
+    i18nService.init();
     const { WebAppService } = await import('@/main/services/webAppService');
     webAppService = new WebAppService();
   });

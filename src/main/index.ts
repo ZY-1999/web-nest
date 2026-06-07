@@ -10,6 +10,7 @@ import { serialize } from '@/shared/utils/serialize';
 import { paths } from './utils/paths';
 import { webAppService } from './services/webAppService';
 import { windowManager } from './windowManager';
+import { i18nService } from './services/i18nService';
 
 const log = logger(__SOURCE_FILE__);
 
@@ -34,6 +35,9 @@ logManager.initLog({
     return `${time} [${level}]${source}${ctxStr} ${msg}`;
   },
 });
+
+// Initialize i18n before any user-facing text is needed
+i18nService.init();
 
 // Single instance lock — second instance forwards args to the first
 const gotTheLock = app.requestSingleInstanceLock();
@@ -71,7 +75,7 @@ if (!gotTheLock) {
         log.info('Shortcut mode: opened web app', openAppId);
       } catch (error) {
         log.error('Shortcut mode: failed to open web app:', openAppId, error);
-        dialog.showErrorBox('Web Nest', `无法打开应用: ${openAppId}`);
+        dialog.showErrorBox('Web Nest', i18nService.t('errors.failedToOpenApp', { id: openAppId }));
         app.quit();
       }
       return;

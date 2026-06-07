@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/renderer/components/ui/button'
 import {
   Dialog,
@@ -13,6 +14,7 @@ import { webAppMainApi } from '@/shared/services'
 import { Plus, MoreVertical, Pencil, Trash2, Pin, PinOff } from 'lucide-react'
 
 function AddDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { t } = useTranslation()
   const { addApp } = useWebAppStore()
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
@@ -42,20 +44,20 @@ function AddDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add Web App</DialogTitle>
+          <DialogTitle>{t('catalog.addWebApp')}</DialogTitle>
         </DialogHeader>
         <input
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Enter URL (e.g. https://example.com)"
+          placeholder={t('catalog.enterUrl')}
           className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           data-testid="add-url-input"
         />
         <DialogFooter>
           <Button onClick={handleSubmit} disabled={loading || !url.trim()} data-testid="add-submit">
-            {loading ? 'Opening...' : 'Open'}
+            {loading ? t('catalog.opening') : t('catalog.open')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -72,6 +74,7 @@ function EditDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useTranslation()
   const { apps, updateApp } = useWebAppStore()
   const app = apps.find((a) => a.id === appId)
   const [title, setTitle] = useState('')
@@ -108,11 +111,11 @@ function EditDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Edit Web App</DialogTitle>
+          <DialogTitle>{t('catalog.editWebApp')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <label className="mb-1 block text-sm font-medium">Title</label>
+            <label className="mb-1 block text-sm font-medium">{t('catalog.title')}</label>
             <input
               type="text"
               value={title}
@@ -122,7 +125,7 @@ function EditDialog({
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium">URL</label>
+            <label className="mb-1 block text-sm font-medium">{t('catalog.url')}</label>
             <input
               type="url"
               value={url}
@@ -135,7 +138,7 @@ function EditDialog({
         </div>
         <DialogFooter>
           <Button onClick={handleSave} disabled={loading} data-testid="edit-submit">
-            {loading ? 'Saving...' : 'Save'}
+            {loading ? t('catalog.saving') : t('catalog.save')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -154,6 +157,7 @@ function AppCard({
   onEdit: () => void
   onDelete: () => void
 }) {
+  const { t } = useTranslation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [shortcutExists, setShortcutExists] = useState(false)
   const cardRef = React.useRef<HTMLDivElement>(null)
@@ -231,7 +235,7 @@ function AppCard({
             data-testid="webapp-edit-btn"
           >
             <Pencil className="h-3.5 w-3.5" />
-            Edit
+            {t('catalog.edit')}
           </button>
           <button
             onClick={handleToggleShortcut}
@@ -239,7 +243,7 @@ function AppCard({
             data-testid={shortcutExists ? 'webapp-remove-shortcut-btn' : 'webapp-shortcut-btn'}
           >
             {shortcutExists ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-            {shortcutExists ? 'Remove Shortcut' : 'Create Shortcut'}
+            {shortcutExists ? t('catalog.removeShortcut') : t('catalog.createShortcut')}
           </button>
           <button
             onClick={() => { setMenuOpen(false); onDelete() }}
@@ -247,7 +251,7 @@ function AppCard({
             data-testid="webapp-delete-btn"
           >
             <Trash2 className="h-3.5 w-3.5" />
-            Delete
+            {t('catalog.delete')}
           </button>
         </div>
       )}
@@ -256,6 +260,7 @@ function AppCard({
 }
 
 export function WebCatalog() {
+  const { t } = useTranslation()
   const { apps, setApps, removeApp } = useWebAppStore()
   const [addOpen, setAddOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -283,7 +288,7 @@ export function WebCatalog() {
 
   return (
     <div className="flex-1 overflow-auto bg-background p-8 pt-2">
-      <h1 className="sr-only">Web Catalog</h1>
+      <h1 className="sr-only">{t('catalog.webCatalog')}</h1>
       <div className="mx-auto grid max-w-4xl grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-4">
         {apps.map((app) => (
           <AppCard
@@ -301,13 +306,13 @@ export function WebCatalog() {
           className="aspect-square flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground/60 hover:bg-accent"
         >
           <Plus className="h-8 w-8" />
-          <span className="mt-1 text-sm">Add</span>
+          <span className="mt-1 text-sm">{t('catalog.add')}</span>
         </button>
       </div>
 
       {apps.length === 0 && (
         <p className="mt-8 text-center text-muted-foreground" data-testid="empty-message">
-          No web apps. Click + to add one.
+          {t('catalog.emptyMessage')}
         </p>
       )}
 

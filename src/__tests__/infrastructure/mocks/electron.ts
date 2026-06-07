@@ -6,6 +6,7 @@ export const mockApp = {
   quit: vi.fn(),
   relaunch: vi.fn(),
   exit: vi.fn(),
+  getLocale: vi.fn(() => 'en'),
   getPath: vi.fn((name: string) => `/fake/path/${name}`),
   getName: vi.fn(() => 'TestApp'),
   getVersion: vi.fn(() => '1.0.0'),

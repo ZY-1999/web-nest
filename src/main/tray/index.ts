@@ -1,6 +1,7 @@
 import { Tray, Menu, nativeImage, app } from 'electron';
 import { windowManager } from '../windowManager';
 import { paths } from '../utils/paths';
+import { i18nService } from '../services/i18nService';
 
 let tray: Tray | null = null;
 
@@ -28,10 +29,10 @@ export const appTray = {
     });
 
     const contextMenu = Menu.buildFromTemplate([
-      { label: 'Show', click: () => getMainWindow()?.show() },
-      { label: 'Hide', click: () => getMainWindow()?.hide() },
+      { label: i18nService.t('tray.show'), click: () => getMainWindow()?.show() },
+      { label: i18nService.t('tray.hide'), click: () => getMainWindow()?.hide() },
       { type: 'separator' },
-      { label: 'Quit', click: () => app.quit() },
+      { label: i18nService.t('tray.quit'), click: () => app.quit() },
     ]);
 
     tray.setContextMenu(contextMenu);

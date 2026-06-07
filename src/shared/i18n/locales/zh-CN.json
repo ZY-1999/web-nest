@@ -1,0 +1,39 @@
+{
+  "catalog": {
+    "addWebApp": "添加 Web 应用",
+    "enterUrl": "输入 URL（如 https://example.com）",
+    "opening": "正在打开...",
+    "open": "打开",
+    "editWebApp": "编辑 Web 应用",
+    "title": "标题",
+    "url": "URL",
+    "saving": "正在保存...",
+    "save": "保存",
+    "edit": "编辑",
+    "delete": "删除",
+    "createShortcut": "创建快捷方式",
+    "removeShortcut": "移除快捷方式",
+    "add": "添加",
+    "emptyMessage": "暂无 Web 应用，点击 + 添加。",
+    "webCatalog": "Web 应用目录"
+  },
+  "titlebar": {
+    "appName": "web-nest",
+    "toggleTheme": "切换主题",
+    "back": "后退",
+    "forward": "前进",
+    "refresh": "刷新",
+    "copyUrl": "复制 URL"
+  },
+  "tray": {
+    "show": "显示",
+    "hide": "隐藏",
+    "quit": "退出"
+  },
+  "errors": {
+    "webAppNotFound": "未找到 Web 应用：{{id}}",
+    "shortcutNotSupported": "桌面快捷方式仅支持 Windows",
+    "failedToOpenApp": "无法打开应用：{{id}}",
+    "shortcutDescription": "在 Web Nest 中打开 {{title}}"
+  }
+}

@@ -18,6 +18,7 @@ import { serviceRegistry } from '@/shared/serviceRegistry';
 import { themeService } from '@/main/services/themeService';
 import { WebAppWindowService } from '@/main/services/webAppWindowService';
 import { debounce } from '@/main/utils/debounce';
+import { i18nService } from '@/main/services/i18nService';
 
 const log = logger(__SOURCE_FILE__);
 
@@ -353,7 +354,7 @@ export class WebAppService extends WebAppMainApi {
     const persisted = appConfigService.loadApps(configDir);
     const appData = persisted.find((a) => a.id === id);
     if (!appData) {
-      throw new Error(`Web app not found: ${id}`);
+      throw new Error(i18nService.t('errors.webAppNotFound', { id }));
     }
 
     // If already open and alive, just return
@@ -434,7 +435,7 @@ export class WebAppService extends WebAppMainApi {
     const persisted = appConfigService.loadApps(configDir);
     const idx = persisted.findIndex((a) => a.id === id);
     if (idx === -1) {
-      throw new Error(`Web app not found: ${id}`);
+      throw new Error(i18nService.t('errors.webAppNotFound', { id }));
     }
     if (data.title !== undefined) {
       persisted[idx].title = data.title;
@@ -474,7 +475,7 @@ export class WebAppService extends WebAppMainApi {
 
   async createShortcut(id: string): Promise<void> {
     if (!shortcutService.isShortcutSupported()) {
-      throw new Error('Desktop shortcuts are only supported on Windows');
+      throw new Error(i18nService.t('errors.shortcutNotSupported'));
     }
     const configDir = this.getConfigDir();
     const persisted = appConfigService.loadApps(configDir);
@@ -489,7 +490,7 @@ export class WebAppService extends WebAppMainApi {
 
   async removeShortcut(id: string): Promise<void> {
     if (!shortcutService.isShortcutSupported()) {
-      throw new Error('Desktop shortcuts are only supported on Windows');
+      throw new Error(i18nService.t('errors.shortcutNotSupported'));
     }
     await shortcutService.removeDesktopShortcut(id);
     log.info('Shortcut removed for:', id);

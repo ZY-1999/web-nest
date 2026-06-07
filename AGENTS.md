@@ -71,7 +71,7 @@
 ### 关键设计模式
 
 - **`@Singleton()` 装饰器** (`src/shared/utils/singleton.ts`): 进程内单例，支持按进程类型限制
-- **Service Export 统一约定** (`当前约定`): 所有 service 使用 `class + export const xxService = new XxxService()` 模式导出，消费方通过 `xxService.method()` 调用。per-view service（如 `WebAppWindowService`）保持 class export 不变
+- **Service Export 统一约定** (`当前约定`): 所有 service 使用 `class + export const xxService = new XxxService()` 模式导出，消费方通过 `xxService.method()` 调用。per-view service（如 `WebAppWindowService`）可选 class export
 - **`Channel` 类** (`src/shared/channel/`): MessagePort IPC 封装，类型安全双向通信
 - **`ServiceRegistry`** (`src/shared/serviceRegistry/`): 服务注册/发现/RPC，`defineApi()` + `implementService()`
 - **`WindowManager`** (`src/main/windowManager/`): 多窗口生命周期，macOS 关闭隐藏到托盘
@@ -139,9 +139,9 @@ Agent 完成代码修改后，必须按以下顺序验证：
 4. `当前约定` 如涉及构建/打包相关改动，运行 `pnpm run build`
 5. `当前约定` 如涉及 UI 改动，运行 `pnpm run dev` 目视确认
 6. `当前约定` 如涉及跨进程通信，运行 `pnpm run test:e2e`（当前 19 E2E tests）
-4. `当前约定` 如涉及构建/打包相关改动，运行 `pnpm run build`
-5. `当前约定` 如涉及 UI 改动，运行 `pnpm run dev` 目视确认
-6. `当前约定` 如涉及跨进程通信，运行 `pnpm run test:e2e`
+7. `当前约定` 如涉及构建/打包相关改动，运行 `pnpm run build`
+8. `当前约定` 如涉及 UI 改动，运行 `pnpm run dev` 目视确认
+9. `当前约定` 如涉及跨进程通信，运行 `pnpm run test:e2e`
 
 ### CI 流水线
 
@@ -200,7 +200,15 @@ GitHub Actions CI 包含三个 job：
 
 - `待补充` **性能基准**: 各核心模块的性能指标和阈值
 - `待补充` **部署流程**: 生产发布流程 (代码签名、公证、更新服务器配置)
-- `待补充` **多语言/国际化**: 模板是否需要内置 i18n 支持
+- `已确定` **多语言/国际化 (i18n)**:
+  - 基于 `i18next` + `react-i18next`，复用 ThemeApi/ThemeService IPC 模式
+  - 主进程 single source of truth（`I18nService`），Renderer 通过 `I18nApi` IPC 获取/切换语言
+  - 当前支持：`zh-CN` + `en`，架构可扩展（`src/shared/i18n/types.ts` → `SupportedLocale`）
+  - 翻译文件：`src/shared/i18n/locales/{en,zh-CN}.json`，单 namespace `translation`，按模块分组 key（`catalog.*`、`titlebar.*`、`tray.*`、`errors.*`）
+  - 语言检测：`app.getLocale()` 系统语言优先 → 用户偏好持久化（`~/.web-nest/locale.config`） → fallback `en`
+  - 语言切换广播：`viewManager.broadcast('locale-changed', locale)` → Renderer `channel.onRequest` 监听
+  - Renderer 初始化：`src/renderer/i18n.ts`（`initI18n` / `changeLocale`），在 React render 前调用
+  - 新增语言：添加 locale JSON → 扩展 `SupportedLocale` → 更新 `resources` 导出
 - `待补充` **无障碍 (a11y)**: 是否需要 WCAG 合规要求
 - `待补充` **安全审计清单**: Electron 安全最佳实践检查项
 - `待补充` **模板使用者的迁移指南**: 版本升级时如何处理 breaking change
