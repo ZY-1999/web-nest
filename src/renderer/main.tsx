@@ -11,19 +11,21 @@ import { DEFAULT_LOCALE, normalizeLocale } from '@/shared/i18n';
 serviceRegistry.setDefaultChannel(channel);
 
 async function main() {
-  // Initialize i18n with locale from main process (must be before React render)
-  try {
-    const locale = await i18nApi.getLocale();
-    initI18n(locale);
-  } catch {
+  // Fetch locale and theme in parallel to reduce init latency
+  const [localeResult, themeResult] = await Promise.allSettled([
+    i18nApi.getLocale(),
+    themeApi.getTheme(),
+  ]);
+
+  if (localeResult.status === 'fulfilled') {
+    initI18n(localeResult.value);
+  } else {
     initI18n(DEFAULT_LOCALE);
   }
 
-  // Apply theme to prevent FOUC
-  try {
-    const tokens = await themeApi.getTheme();
-    applyThemeToRoot(tokens);
-  } catch {
+  if (themeResult.status === 'fulfilled') {
+    applyThemeToRoot(themeResult.value);
+  } else {
     applyThemeToRoot(defaultTheme.tokens);
   }
 

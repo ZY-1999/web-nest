@@ -3,6 +3,9 @@ import { ManagedView } from './managedView';
 import type { ViewOptions, ViewState, ViewEventMap } from '@/shared/view';
 import type { Handler, AnyRequestHandler, ChannelCenter, ChannelAPI } from '@/shared/channel';
 import { Singleton } from '@/shared/utils/singleton';
+import { logger } from '@/shared/utils/log';
+
+const log = logger(__SOURCE_FILE__);
 
 function generateViewId(): string {
   return `view-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -24,6 +27,7 @@ export class ViewManager extends TypedEmitter<ViewEventMap> implements ChannelCe
       defaultChannelTimeout,
       loadUrlOptions = {},
       backgroundColor,
+      waitForLoad = true,
       ...restOptions
     } = options;
 
@@ -49,16 +53,21 @@ export class ViewManager extends TypedEmitter<ViewEventMap> implements ChannelCe
       this.emit('view-ready', viewId);
     });
 
-    // Init channel and load URL before exposing view
-    await view.init({ url, defaultChannelTimeout, ...loadUrlOptions });
-
-    // Apply any registered onAnyRequest handlers
+    // Apply any registered onAnyRequest handlers before exposing view
     for (const [method, handler] of this.anyRequestHandlers) {
       view.channel.onRequest(method, (payload: unknown) => handler(viewId, payload));
     }
 
-    // Only add to views map after full initialization
+    // Add to views map before init so the view is accessible immediately
     this.views.set(viewId, view);
+
+    if (waitForLoad) {
+      await view.init({ url, defaultChannelTimeout, ...loadUrlOptions });
+    } else {
+      view.init({ url, defaultChannelTimeout, ...loadUrlOptions }).catch((err) => {
+        log.error(`View ${viewId} background init failed:`, err);
+      });
+    }
 
     this.emit('view-created', viewId, view.state);
     return viewId;

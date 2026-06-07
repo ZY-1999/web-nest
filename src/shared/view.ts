@@ -21,6 +21,8 @@ export type ViewOptions = Electron.WebPreferences & {
   defaultChannelTimeout?: number;
   loadUrlOptions?: Electron.LoadURLOptions;
   backgroundColor?: string;
+  /** If false, createView resolves immediately after channel init without waiting for did-finish-load. */
+  waitForLoad?: boolean;
 };
 
 export interface ManagedViewEventMap {

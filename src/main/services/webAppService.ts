@@ -56,6 +56,7 @@ interface WebAppEntry {
 @Singleton()
 export class WebAppService extends WebAppMainApi {
   private apps = new Map<string, WebAppEntry>(); // appId → entry
+  private pendingOpens = new Map<string, Promise<WebAppState>>(); // appId → in-flight open
   private configDirCache: string | null = null;
 
   private getConfigDir(): string {
@@ -135,26 +136,7 @@ export class WebAppService extends WebAppMainApi {
       } catch { /* favicon format unsupported by nativeImage, fallback to file icon */ }
     }
 
-    // Set unique AppUserModelId for independent taskbar icon (Windows)
-    app.setAppUserModelId(`web-nest.webapp-${appId}`);
-
-    const windowId = windowManager.createWindow({
-      options: {
-        width: 1200,
-        height: 800,
-        title,
-        icon: windowIcon,
-        ...getTitleBarOptions(),
-      },
-    });
-
-    // Restore default AppUserModelId for future windows (e.g. main window)
-    app.setAppUserModelId('web-nest');
-
-    const nativeWindow = windowManager.getNativeWindow(windowId)!;
-    const contentBounds = nativeWindow.getContentBounds();
-
-    // ── Titlebar view (local renderer, 70px) ──────────────────────────────
+    // ── Create views: await titlebar (fast local), fire-and-forget content ──
     const titlebarUrl = isDev()
       ? 'http://localhost:5173/webapp-titlebar.html'
       : pathToFileURL(paths.getWebAppTitlebarPath()).href;
@@ -166,7 +148,39 @@ export class WebAppService extends WebAppMainApi {
       additionalArguments: buildPreloadArgs({ channelExpose: true }),
     });
 
+    const viewId = await viewManager.createView({
+      url,
+      type: 'embedded',
+      preload: paths.getPreloadPath(),
+      additionalArguments: buildPreloadArgs({ channelExpose: false }),
+      partition: `persist:webapp-${appId}`,
+      waitForLoad: false,
+    });
+
     const titlebarView = viewManager.getView(titlebarViewId)!;
+    const view = viewManager.getView(viewId)!;
+
+    // ── Create hidden window, attach views, then show ─────────────────────
+    // Set unique AppUserModelId for independent taskbar icon (Windows)
+    app.setAppUserModelId(`web-nest.webapp-${appId}`);
+
+    const windowId = windowManager.createWindow({
+      options: {
+        width: 1200,
+        height: 800,
+        title,
+        icon: windowIcon,
+        show: false,
+        ...getTitleBarOptions(),
+      },
+    });
+
+    // Restore default AppUserModelId for future windows (e.g. main window)
+    app.setAppUserModelId('web-nest');
+
+    const nativeWindow = windowManager.getNativeWindow(windowId)!;
+    const contentBounds = nativeWindow.getContentBounds();
+
     titlebarView.attachTo(nativeWindow, {
       x: 0,
       y: 0,
@@ -174,16 +188,6 @@ export class WebAppService extends WebAppMainApi {
       height: WEBAPP_TITLEBAR_HEIGHT,
     });
 
-    // ── Content view (external URL, fills remaining space) ────────────────
-    const viewId = await viewManager.createView({
-      url,
-      type: 'embedded',
-      preload: paths.getPreloadPath(),
-      additionalArguments: buildPreloadArgs({ channelExpose: false }),
-      partition: `persist:webapp-${appId}`,
-    });
-
-    const view = viewManager.getView(viewId)!;
     view.attachTo(nativeWindow, {
       x: 0,
       y: WEBAPP_TITLEBAR_HEIGHT,
@@ -200,6 +204,9 @@ export class WebAppService extends WebAppMainApi {
       webAppService,
       windowService,
     );
+
+    // Window appears with views already loaded — no blank flash
+    nativeWindow.show();
 
     // Fetch favicon async to refresh cache / update if no cache hit
     faviconService.fetchFaviconDataUrl(appId, faviconUrl).then((dataUrl) => {
@@ -350,6 +357,21 @@ export class WebAppService extends WebAppMainApi {
   }
 
   async openWebApp(id: string): Promise<WebAppState> {
+    // Deduplicate: if already opening, reuse the same promise
+    const pending = this.pendingOpens.get(id);
+    if (pending) { return pending; }
+
+    const promise = this._doOpenWebApp(id);
+    this.pendingOpens.set(id, promise);
+
+    try {
+      return await promise;
+    } finally {
+      this.pendingOpens.delete(id);
+    }
+  }
+
+  private async _doOpenWebApp(id: string): Promise<WebAppState> {
     const configDir = this.getConfigDir();
     const persisted = appConfigService.loadApps(configDir);
     const appData = persisted.find((a) => a.id === id);
