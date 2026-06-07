@@ -1,3 +1,5 @@
+import './errorHandlers';
+
 import { app, dialog } from 'electron';
 import { logManager, logger } from '@/shared/utils/log';
 import { initUpdater } from './updater';
