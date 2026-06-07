@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '@/renderer/components/ui/dialog';
 import { useWebAppStore } from '../../stores/webAppStore';
+import { FaviconImg } from '@/renderer/components/FaviconImg';
 import { webAppMainApi } from '@/shared/services';
 import { Plus, MoreVertical, Pencil, Trash2, Pin } from 'lucide-react';
 
@@ -178,13 +179,7 @@ function AppCard({
     >
       {/* Favicon: 36x36 white circle, 24x24 image */}
       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white">
-        {app.faviconDataUrl ? (
-          <img src={app.faviconDataUrl} alt="" className="h-6 w-6 rounded" data-testid="webapp-favicon" />
-        ) : (
-          <span className="h-6 w-6 flex items-center justify-center text-xs font-bold text-gray-500" data-testid="webapp-favicon-fallback">
-            {app.title.charAt(0).toUpperCase()}
-          </span>
-        )}
+        <FaviconImg appId={app.id} fallback={app.title} />
       </div>
 
       {/* Title */}

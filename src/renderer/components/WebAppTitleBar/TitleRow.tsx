@@ -1,4 +1,5 @@
 import { ThemeToggle } from '../ThemeToggle';
+import { FaviconImg } from '@/renderer/components/FaviconImg';
 
 interface TitleRowProps {
   faviconDataUrl?: string;
@@ -9,11 +10,7 @@ export function TitleRow({ faviconDataUrl, title }: TitleRowProps) {
   return (
     <div className="titlebar-row-1" data-testid="titlebar-row-1">
       <div className="titlebar-row-1-left">
-        {faviconDataUrl ? (
-          <img src={faviconDataUrl} alt="" className="h-4 w-4 rounded-sm" draggable={false} />
-        ) : (
-          <div className="h-4 w-4 rounded-sm bg-muted" />
-        )}
+        <FaviconImg faviconDataUrl={faviconDataUrl} />
       </div>
       <div className="titlebar-row-1-center" data-testid="titlebar-title">
         {title}

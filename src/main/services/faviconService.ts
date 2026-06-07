@@ -42,7 +42,7 @@ export async function fetchFaviconDataUrl(appId: string, faviconUrl: string): Pr
 
   // Fetch via Electron net (respects system proxy)
   try {
-    const response = await net.fetch(faviconUrl);
+    const response = await net.fetch(faviconUrl, { signal: AbortSignal.timeout(5000) });
     if (!response.ok) {
       log.warn('Favicon fetch failed:', faviconUrl, response.status);
       return '';

@@ -1,6 +1,6 @@
 # Feature Spec: Favicon 异步化 + 全局管理服务 + 专用组件
 
-> **Phase**: Research (待确认)
+> **Phase**: Review ✅ Done
 > **Created**: 2026-06-07
 > **Status**: Active
 
@@ -151,3 +151,81 @@ fs.writeFileSync(
 );
 // 写入 apps.config 引用该 appId
 ```
+
+---
+
+## 3. Plan（原子 Checklist）
+
+### File Changes & Signatures
+
+| # | File | Change | Signatures |
+|---|---|---|---|
+| 1 | `src/main/services/faviconService.ts` | `net.fetch` 加 5s 超时 | `fetchFaviconDataUrl(appId, faviconUrl): Promise<string>` — 增加 `signal: AbortSignal.timeout(5000)` |
+| 2 | `src/shared/services/webAppApi.ts` | 新增 API 方法 | `abstract getFavicon(id: string): Promise<string>` |
+| 3 | `src/main/services/webAppService.ts` | 实现 `getFavicon`；4 个方法改为非阻塞 | `getFavicon(id): Promise<string>` 返回缓存值或空串，触发异步获取 |
+| 4 | `src/main/services/webAppService.ts` | `createWindowForApp` 监听 `page-favicon-updated` | content view `webContents.on('page-favicon-updated', ...)` → 获取真实 favicon URL → `fetchFaviconDataUrl` → 更新 titlebar + 窗口图标 |
+| 5 | `src/renderer/stores/faviconStore.ts` | **新建** zustand store | `requestFavicon(appId): void`, `setLoaded(appId, dataUrl): void`, `dispose(): void`, 2s 轮询逻辑 |
+| 6 | `src/renderer/components/FaviconImg/index.tsx` | **新建** 专用组件 | `FaviconImg({ appId?, faviconDataUrl?, fallback? })` — `data-testid: favicon-spinner / favicon-image / favicon-fallback` |
+| 7 | `src/renderer/components/WebCatalog/index.tsx` | AppCard 替换为 FaviconImg | `<FaviconImg appId={app.id} fallback={app.title} />` |
+| 8 | `src/renderer/components/WebAppTitleBar/TitleRow.tsx` | TitleRow 替换为 FaviconImg | `<FaviconImg faviconDataUrl={faviconDataUrl} />` |
+
+### Implementation Checklist
+
+#### MCU-1: 主进程非阻塞化
+
+- [x] 1.1 `faviconService.ts` — `net.fetch` 添加 `signal: AbortSignal.timeout(5000)`
+- [x] 1.2 `webAppApi.ts` — `WebAppMainApi` 新增 `abstract getFavicon(id: string): Promise<string>`
+- [x] 1.3 `webAppService.ts` — 实现 `getFavicon(id)`：`getCachedFaviconDataUrlSync` 读缓存返回，未命中返回空串；同时 `fetchFaviconDataUrl(appId, faviconUrl)` 异步触发（fire-and-forget，需从 persisted config 读取 `faviconUrl`）
+- [x] 1.4 `webAppService.ts` — `listWebApps()`：每个 app 用 `getCachedFaviconDataUrlSync(app.id)` 替代 `await fetchFaviconDataUrl()`；未缓存的 fire-and-forget `fetchFaviconDataUrl()`
+- [x] 1.5 `webAppService.ts` — `createWebApp(url)`：先 `getCachedFaviconDataUrlSync` 生成结果返回（新 app 无缓存所以为 undefined），fire-and-forget `fetchFaviconDataUrl`
+- [x] 1.6 `webAppService.ts` — `openWebApp(id)`：同上模式
+- [x] 1.7 `webAppService.ts` — `updateWebApp(id, data)`：同上模式
+- [x] 1.8 `webAppService.ts` — `createWindowForApp`：content view 添加 `webContents.on('page-favicon-updated', (event, urls) => { ... })`，用 `urls[0]` 调用 `fetchFaviconDataUrl(appId, urls[0])` → 更新缓存 → 更新 titlebar 图标 + 窗口图标
+
+#### MCU-2: faviconStore + FaviconImg
+
+- [x] 2.1 新建 `src/renderer/stores/faviconStore.ts`
+  - State: `favicons: Record<string, { status: 'loading' | 'loaded'; dataUrl?: string }>`
+  - `requestFavicon(appId)`: IPC `getFavicon(appId)`，命中 → `setLoaded`；未命中 → 加入 loading 队列
+  - 轮询：`setInterval(2000)` 遍历 loading 条目调 `getFavicon`，全部 loaded 后 `clearInterval`
+  - `dispose()`: 清理定时器
+- [x] 2.2 新建 `src/renderer/components/FaviconImg/index.tsx`
+  - Props: `appId?: string; faviconDataUrl?: string; fallback?: string`
+  - `appId` 模式（catalog）：mount 时 `requestFavicon(appId)`，订阅 store 状态渲染
+  - `faviconDataUrl` 模式（titlebar）：直接渲染，不走 store
+  - 三种渲染状态：`favicon-spinner`（CSS 旋转动画）/ `favicon-image`（`<img>`）/ `favicon-fallback`（首字母）
+
+#### MCU-3: 替换消费方
+
+- [x] 3.1 `WebCatalog/index.tsx` — AppCard 替换内联 favicon 为 `<FaviconImg appId={app.id} fallback={app.title} />`，移除 AppCard props 中 `faviconDataUrl` 的内联判断逻辑
+- [x] 3.2 `WebAppTitleBar/TitleRow.tsx` — 替换内联 favicon 为 `<FaviconImg faviconDataUrl={faviconDataUrl} />`
+
+#### 验证
+
+- [x] V1 `pnpm run typecheck` 通过
+- [x] V2 `pnpm run lint` 通过
+- [x] V3 `pnpm run test` 140+ tests 通过
+- [x] V4 `pnpm run build` 通过
+- [x] V5 E2E 测试选择器适配（现有 `webapp-favicon` / `webapp-favicon-fallback` → `favicon-image` / `favicon-spinner` / `favicon-fallback`）
+
+### Constraints
+
+- **ZERO DEVIATION**：按 checklist 顺序执行，每项完成后立即持久化
+- 偏差处理：执行中遇到 Spec 未覆盖的问题 → STOP → 记录 → 回到 Plan 修正
+- `WebAppState.faviconDataUrl` 字段保留，由 sync cache 填充（已有缓存时仍直接可用）
+
+---
+
+## 6. Review Verdict
+
+**Overall**: ✅ PASS | **Date**: 2026-06-07
+
+| Axis | Verdict | Notes |
+|---|---|---|
+| Requirement Completion | ✅ PASS | 全部 4 个 Goal 达成 |
+| Spec-Code Fidelity | ✅ PASS | 零偏差 |
+| Code Quality | ✅ PASS | 无高风险项 |
+
+**Plan-Execution Diff**: 无。
+
+**验证证据**: typecheck ✅ | lint ✅ | 140 tests ✅ | build ✅

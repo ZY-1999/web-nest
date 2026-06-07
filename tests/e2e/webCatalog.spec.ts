@@ -116,10 +116,11 @@ test('favicon shows in card', async ({ electronApp }) => {
   const card = mainWindow.locator('[data-testid="webapp-card"]');
   await expect(card).toBeVisible({ timeout: 10000 });
 
-  // Either favicon img or fallback letter should be visible
-  const hasFavicon = await card.locator('[data-testid="webapp-favicon"]').isVisible().catch(() => false);
-  const hasFallback = await card.locator('[data-testid="webapp-favicon-fallback"]').isVisible().catch(() => false);
-  expect(hasFavicon || hasFallback).toBe(true);
+  // Either favicon image, spinner, or fallback letter should be visible
+  const hasImage = await card.locator('[data-testid="favicon-image"]').isVisible().catch(() => false);
+  const hasSpinner = await card.locator('[data-testid="favicon-spinner"]').isVisible().catch(() => false);
+  const hasFallback = await card.locator('[data-testid="favicon-fallback"]').isVisible().catch(() => false);
+  expect(hasImage || hasSpinner || hasFallback).toBe(true);
 });
 
 test('app persists across restart', async ({ electronApp }) => {
