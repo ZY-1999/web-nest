@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { loadApps, saveApps } from '@/main/services/appConfigService';
+import { appConfigService } from '@/main/services/appConfigService';
 import type { PersistedApp } from '@/main/services/appConfigService';
 
 vi.mock('electron', () => ({
@@ -32,7 +32,7 @@ describe('appConfigService', () => {
 
   it('loadApps returns empty array when file does not exist', () => {
     const dir = '/tmp/nonexistent-dir-' + Date.now();
-    const result = loadApps(dir);
+    const result = appConfigService.loadApps(dir);
     expect(result).toEqual([]);
   });
 
@@ -40,8 +40,8 @@ describe('appConfigService', () => {
     const dir = `/tmp/web-nest-test-${Date.now()}`;
     fs.mkdirSync(dir, { recursive: true });
 
-    saveApps(dir, mockApps);
-    const loaded = loadApps(dir);
+    appConfigService.saveApps(dir, mockApps);
+    const loaded = appConfigService.loadApps(dir);
 
     expect(loaded).toEqual(mockApps);
 
@@ -53,12 +53,12 @@ describe('appConfigService', () => {
     const dir = `/tmp/web-nest-test-${Date.now()}`;
     fs.mkdirSync(dir, { recursive: true });
 
-    saveApps(dir, mockApps);
+    appConfigService.saveApps(dir, mockApps);
     const updated = [
       { id: 'app-2', url: 'https://other.com', title: 'Other', faviconUrl: '' },
     ];
-    saveApps(dir, updated);
-    const loaded = loadApps(dir);
+    appConfigService.saveApps(dir, updated);
+    const loaded = appConfigService.loadApps(dir);
 
     expect(loaded).toEqual(updated);
 
@@ -70,7 +70,7 @@ describe('appConfigService', () => {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'apps.config'), '{invalid json', 'utf-8');
 
-    const loaded = loadApps(dir);
+    const loaded = appConfigService.loadApps(dir);
     expect(loaded).toEqual([]);
 
     fs.rmSync(dir, { recursive: true, force: true });

@@ -24,8 +24,8 @@ describe('faviconService', () => {
   it('returns empty string when fetch fails', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 404 });
 
-    const { fetchFaviconDataUrl } = await import('@/main/services/faviconService');
-    const result = await fetchFaviconDataUrl('app-1', 'https://fail.example.com/favicon.ico');
+    const { faviconService } = await import('@/main/services/faviconService');
+    const result = await faviconService.fetchFaviconDataUrl('app-1', 'https://fail.example.com/favicon.ico');
     expect(result).toBe('');
   });
 
@@ -37,8 +37,8 @@ describe('faviconService', () => {
       arrayBuffer: async () => pngBuffer.buffer,
     });
 
-    const { fetchFaviconDataUrl } = await import('@/main/services/faviconService');
-    const result = await fetchFaviconDataUrl('app-2', 'https://ok.example.com/favicon.ico');
+    const { faviconService } = await import('@/main/services/faviconService');
+    const result = await faviconService.fetchFaviconDataUrl('app-2', 'https://ok.example.com/favicon.ico');
     expect(result).toMatch(/^data:image\/png;base64,/);
   });
 
@@ -50,12 +50,12 @@ describe('faviconService', () => {
       arrayBuffer: async () => pngBuffer.buffer,
     });
 
-    const { fetchFaviconDataUrl } = await import('@/main/services/faviconService');
+    const { faviconService } = await import('@/main/services/faviconService');
 
-    const result1 = await fetchFaviconDataUrl('app-cache', 'https://cache.example.com/favicon.ico');
+    const result1 = await faviconService.fetchFaviconDataUrl('app-cache', 'https://cache.example.com/favicon.ico');
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
-    const result2 = await fetchFaviconDataUrl('app-cache', 'https://cache.example.com/favicon.ico');
+    const result2 = await faviconService.fetchFaviconDataUrl('app-cache', 'https://cache.example.com/favicon.ico');
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(result1).toBe(result2);
   });
@@ -68,34 +68,34 @@ describe('faviconService', () => {
       arrayBuffer: async () => pngBuffer.buffer,
     });
 
-    const { fetchFaviconDataUrl, clearAppFaviconCache } = await import('@/main/services/faviconService');
+    const { faviconService } = await import('@/main/services/faviconService');
 
     // Fetch for app-a (triggers network request)
-    await fetchFaviconDataUrl('app-a', 'https://shared.example.com/favicon.ico');
+    await faviconService.fetchFaviconDataUrl('app-a', 'https://shared.example.com/favicon.ico');
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
     // Fetch for app-b with same URL (triggers another network request — separate cache)
-    await fetchFaviconDataUrl('app-b', 'https://shared.example.com/favicon.ico');
+    await faviconService.fetchFaviconDataUrl('app-b', 'https://shared.example.com/favicon.ico');
     expect(mockFetch).toHaveBeenCalledTimes(2);
 
     // Both hit their own cache now
-    await fetchFaviconDataUrl('app-a', 'https://shared.example.com/favicon.ico');
-    await fetchFaviconDataUrl('app-b', 'https://shared.example.com/favicon.ico');
+    await faviconService.fetchFaviconDataUrl('app-a', 'https://shared.example.com/favicon.ico');
+    await faviconService.fetchFaviconDataUrl('app-b', 'https://shared.example.com/favicon.ico');
     expect(mockFetch).toHaveBeenCalledTimes(2);
 
     // Clear app-a's cache
-    clearAppFaviconCache('app-a');
-    await fetchFaviconDataUrl('app-a', 'https://shared.example.com/favicon.ico');
+    faviconService.clearAppFaviconCache('app-a');
+    await faviconService.fetchFaviconDataUrl('app-a', 'https://shared.example.com/favicon.ico');
     expect(mockFetch).toHaveBeenCalledTimes(3); // re-fetched for app-a
 
     // app-b still cached
-    await fetchFaviconDataUrl('app-b', 'https://shared.example.com/favicon.ico');
+    await faviconService.fetchFaviconDataUrl('app-b', 'https://shared.example.com/favicon.ico');
     expect(mockFetch).toHaveBeenCalledTimes(3);
   });
 
   it('returns empty string without fetching when url is empty', async () => {
-    const { fetchFaviconDataUrl } = await import('@/main/services/faviconService');
-    const result = await fetchFaviconDataUrl('app-empty', '');
+    const { faviconService } = await import('@/main/services/faviconService');
+    const result = await faviconService.fetchFaviconDataUrl('app-empty', '');
     expect(result).toBe('');
     expect(mockFetch).not.toHaveBeenCalled();
   });
@@ -103,8 +103,8 @@ describe('faviconService', () => {
   it('returns empty string when fetch throws', async () => {
     mockFetch.mockRejectedValue(new Error('Network error'));
 
-    const { fetchFaviconDataUrl } = await import('@/main/services/faviconService');
-    const result = await fetchFaviconDataUrl('app-err', 'https://error.example.com/favicon.ico');
+    const { faviconService } = await import('@/main/services/faviconService');
+    const result = await faviconService.fetchFaviconDataUrl('app-err', 'https://error.example.com/favicon.ico');
     expect(result).toBe('');
   });
 });

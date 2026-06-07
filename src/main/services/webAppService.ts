@@ -8,10 +8,10 @@ import { logger } from '@/shared/utils/log';
 import { windowManager } from '@/main/windowManager';
 import { viewManager } from '@/main/viewManager';
 import { paths } from '@/main/utils/paths';
-import { loadApps, saveApps } from '@/main/services/appConfigService';
-import { fetchFaviconDataUrl, getCachedFaviconDataUrlSync, clearAppFaviconCache } from '@/main/services/faviconService';
+import { appConfigService } from '@/main/services/appConfigService';
+import { faviconService } from '@/main/services/faviconService';
 import { buildPreloadArgs } from '@/shared/preload/args';
-import { createDesktopShortcut, hasDesktopShortcut, isShortcutSupported, removeDesktopShortcut } from '@/main/services/shortcutService';
+import { shortcutService } from '@/main/services/shortcutService';
 import { isDev } from '@/shared/utils/env';
 import { getTitleBarOptions, WEBAPP_TITLEBAR_HEIGHT } from '@/shared/titlebar';
 import { serviceRegistry } from '@/shared/serviceRegistry';
@@ -74,7 +74,7 @@ export class WebAppService extends WebAppMainApi {
   }
 
   private persist() {
-    saveApps(this.getConfigDir(), this.getPersistedApps());
+    appConfigService.saveApps(this.getConfigDir(), this.getPersistedApps());
   }
 
   /** Destroy content view + titlebar view + window resources for an in-memory entry. */
@@ -121,7 +121,7 @@ export class WebAppService extends WebAppMainApi {
     title: string,
   ): Promise<WebAppEntry> {
     // Use cached favicon for initial icon (avoids network wait)
-    const cachedFaviconDataUrl = getCachedFaviconDataUrlSync(appId);
+    const cachedFaviconDataUrl = faviconService.getCachedFaviconDataUrlSync(appId);
     const initialIconDataUrl = cachedFaviconDataUrl ?? loadDefaultIconDataUrl();
 
     // Build initial window icon: cached favicon → NativeImage, fallback to default icon file
@@ -201,7 +201,7 @@ export class WebAppService extends WebAppMainApi {
     );
 
     // Fetch favicon async to refresh cache / update if no cache hit
-    fetchFaviconDataUrl(appId, faviconUrl).then((dataUrl) => {
+    faviconService.fetchFaviconDataUrl(appId, faviconUrl).then((dataUrl) => {
       if (!dataUrl || dataUrl === cachedFaviconDataUrl) { return; } // no change
       windowService.updateFaviconDataUrl(dataUrl);
       const wc = view.webContents;
@@ -261,7 +261,7 @@ export class WebAppService extends WebAppMainApi {
     const onFaviconUpdated = debounce((urls: string[]) => {
       if (view.webContents.isDestroyed()) { return; }
       log.info('Page favicon updated:', appId, urls[0]);
-      fetchFaviconDataUrl(appId, urls[0]).then((dataUrl) => {
+      faviconService.fetchFaviconDataUrl(appId, urls[0]).then((dataUrl) => {
         if (!dataUrl) { return; }
         windowService.updateFaviconDataUrl(dataUrl);
         const navState = { ...windowService.buildNavState(), faviconDataUrl: dataUrl };
@@ -311,7 +311,7 @@ export class WebAppService extends WebAppMainApi {
     this.persist();
 
     // Async favicon fetch already triggered in createWindowForApp; use sync cache here
-    const faviconDataUrl = getCachedFaviconDataUrlSync(appId) ?? '';
+    const faviconDataUrl = faviconService.getCachedFaviconDataUrlSync(appId) ?? '';
 
     log.info('Web app created:', appId, url);
     return { id: appId, url: entry.url, title: entry.title, faviconUrl, faviconDataUrl };
@@ -332,25 +332,25 @@ export class WebAppService extends WebAppMainApi {
     }
 
     // Remove desktop shortcut (now async)
-    await removeDesktopShortcut(id);
+    await shortcutService.removeDesktopShortcut(id);
 
     // Remove from persisted storage
     const configDir = this.getConfigDir();
-    const persisted = loadApps(configDir).filter((a) => a.id !== id);
-    saveApps(configDir, persisted);
+    const persisted = appConfigService.loadApps(configDir).filter((a) => a.id !== id);
+    appConfigService.saveApps(configDir, persisted);
 
     // Clear persisted session data (cookies, localStorage, cache, etc.)
     await this.clearAppSession(id);
 
     // Clear per-app favicon cache
-    clearAppFaviconCache(id);
+    faviconService.clearAppFaviconCache(id);
 
     log.info('Web app deleted:', id);
   }
 
   async openWebApp(id: string): Promise<WebAppState> {
     const configDir = this.getConfigDir();
-    const persisted = loadApps(configDir);
+    const persisted = appConfigService.loadApps(configDir);
     const appData = persisted.find((a) => a.id === id);
     if (!appData) {
       throw new Error(`Web app not found: ${id}`);
@@ -360,10 +360,10 @@ export class WebAppService extends WebAppMainApi {
     if (this.apps.has(id)) {
       const existing = this.apps.get(id)!;
       if (this.isEntryAlive(existing)) {
-        const faviconDataUrl = getCachedFaviconDataUrlSync(id) ?? '';
+        const faviconDataUrl = faviconService.getCachedFaviconDataUrlSync(id) ?? '';
         // Trigger async refresh for uncached (fire-and-forget)
         if (!faviconDataUrl) {
-          fetchFaviconDataUrl(id, existing.faviconUrl).catch(() => {});
+          faviconService.fetchFaviconDataUrl(id, existing.faviconUrl).catch(() => {});
         }
         return { id: existing.appId, url: existing.url, title: existing.title, faviconUrl: existing.faviconUrl, faviconDataUrl };
       }
@@ -376,9 +376,9 @@ export class WebAppService extends WebAppMainApi {
     this.apps.set(id, entry);
 
     // Async favicon fetch already triggered in createWindowForApp; use sync cache here
-    const faviconDataUrl = getCachedFaviconDataUrlSync(id) ?? '';
+    const faviconDataUrl = faviconService.getCachedFaviconDataUrlSync(id) ?? '';
     if (!faviconDataUrl) {
-      fetchFaviconDataUrl(id, appData.faviconUrl).catch(() => {});
+      faviconService.fetchFaviconDataUrl(id, appData.faviconUrl).catch(() => {});
     }
 
     log.info('Web app opened:', id);
@@ -387,12 +387,12 @@ export class WebAppService extends WebAppMainApi {
 
   async listWebApps(): Promise<WebAppState[]> {
     const configDir = this.getConfigDir();
-    const persisted = loadApps(configDir);
+    const persisted = appConfigService.loadApps(configDir);
 
     const results: WebAppState[] = [];
     for (const app of persisted) {
       const entry = this.apps.get(app.id);
-      const faviconDataUrl = getCachedFaviconDataUrlSync(app.id) ?? '';
+      const faviconDataUrl = faviconService.getCachedFaviconDataUrlSync(app.id) ?? '';
       if (entry) {
         results.push({ id: entry.appId, url: entry.url, title: entry.title, faviconUrl: entry.faviconUrl, faviconDataUrl });
       } else {
@@ -400,7 +400,7 @@ export class WebAppService extends WebAppMainApi {
       }
       // Trigger async fetch for uncached favicons (fire-and-forget)
       if (!faviconDataUrl) {
-        fetchFaviconDataUrl(app.id, app.faviconUrl).catch(() => {});
+        faviconService.fetchFaviconDataUrl(app.id, app.faviconUrl).catch(() => {});
       }
     }
     return results;
@@ -422,16 +422,16 @@ export class WebAppService extends WebAppMainApi {
         }
       }
       this.persist();
-      const faviconDataUrl = getCachedFaviconDataUrlSync(id) ?? '';
+      const faviconDataUrl = faviconService.getCachedFaviconDataUrlSync(id) ?? '';
       if (!faviconDataUrl) {
-        fetchFaviconDataUrl(id, entry.faviconUrl).catch(() => {});
+        faviconService.fetchFaviconDataUrl(id, entry.faviconUrl).catch(() => {});
       }
       return { id: entry.appId, url: entry.url, title: entry.title, faviconUrl: entry.faviconUrl, faviconDataUrl };
     }
 
     // Update persisted-only app
     const configDir = this.getConfigDir();
-    const persisted = loadApps(configDir);
+    const persisted = appConfigService.loadApps(configDir);
     const idx = persisted.findIndex((a) => a.id === id);
     if (idx === -1) {
       throw new Error(`Web app not found: ${id}`);
@@ -443,12 +443,12 @@ export class WebAppService extends WebAppMainApi {
       persisted[idx].url = data.url;
       persisted[idx].faviconUrl = googleFaviconUrl(new URL(data.url).hostname);
     }
-    saveApps(configDir, persisted);
+    appConfigService.saveApps(configDir, persisted);
 
     log.info('Web app updated:', id, data);
-    const faviconDataUrl = getCachedFaviconDataUrlSync(id) ?? '';
+    const faviconDataUrl = faviconService.getCachedFaviconDataUrlSync(id) ?? '';
     if (!faviconDataUrl) {
-      fetchFaviconDataUrl(id, persisted[idx].faviconUrl).catch(() => {});
+      faviconService.fetchFaviconDataUrl(id, persisted[idx].faviconUrl).catch(() => {});
     }
     return { ...persisted[idx], faviconDataUrl };
   }
@@ -457,47 +457,47 @@ export class WebAppService extends WebAppMainApi {
   private getFaviconUrlForApp(id: string): string {
     const entry = this.apps.get(id);
     if (entry) { return entry.faviconUrl; }
-    const persisted = loadApps(this.getConfigDir());
+    const persisted = appConfigService.loadApps(this.getConfigDir());
     return persisted.find((a) => a.id === id)?.faviconUrl ?? '';
   }
 
   async getFavicon(id: string): Promise<string> {
-    const cached = getCachedFaviconDataUrlSync(id);
+    const cached = faviconService.getCachedFaviconDataUrlSync(id);
     if (cached) { return cached; }
     // Trigger async fetch for next poll (fire-and-forget)
     const faviconUrl = this.getFaviconUrlForApp(id);
     if (faviconUrl) {
-      fetchFaviconDataUrl(id, faviconUrl).catch(() => {});
+      faviconService.fetchFaviconDataUrl(id, faviconUrl).catch(() => {});
     }
     return '';
   }
 
   async createShortcut(id: string): Promise<void> {
-    if (!isShortcutSupported()) {
+    if (!shortcutService.isShortcutSupported()) {
       throw new Error('Desktop shortcuts are only supported on Windows');
     }
     const configDir = this.getConfigDir();
-    const persisted = loadApps(configDir);
+    const persisted = appConfigService.loadApps(configDir);
     const appData = persisted.find((a) => a.id === id);
     if (!appData) {
       throw new Error(`Web app not found: ${id}`);
     }
-    const faviconDataUrl = getCachedFaviconDataUrlSync(id);
-    createDesktopShortcut(id, appData.title, faviconDataUrl);
+    const faviconDataUrl = faviconService.getCachedFaviconDataUrlSync(id);
+    shortcutService.createDesktopShortcut(id, appData.title, faviconDataUrl);
     log.info('Shortcut created for:', id);
   }
 
   async removeShortcut(id: string): Promise<void> {
-    if (!isShortcutSupported()) {
+    if (!shortcutService.isShortcutSupported()) {
       throw new Error('Desktop shortcuts are only supported on Windows');
     }
-    await removeDesktopShortcut(id);
+    await shortcutService.removeDesktopShortcut(id);
     log.info('Shortcut removed for:', id);
   }
 
   async hasShortcut(id: string): Promise<boolean> {
-    if (!isShortcutSupported()) { return false; }
-    return hasDesktopShortcut(id);
+    if (!shortcutService.isShortcutSupported()) { return false; }
+    return shortcutService.hasDesktopShortcut(id);
   }
 }
 
