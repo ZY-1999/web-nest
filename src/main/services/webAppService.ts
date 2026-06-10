@@ -19,6 +19,7 @@ import { themeService } from '@/main/services/themeService';
 import { WebAppWindowService } from '@/main/services/webAppWindowService';
 import { debounce } from '@/main/utils/debounce';
 import { i18nService } from '@/main/services/i18nService';
+import { settingsService } from '@/main/services/settingsService';
 
 const log = logger(__SOURCE_FILE__);
 
@@ -164,6 +165,12 @@ export class WebAppService extends WebAppMainApi {
 
     const titlebarView = viewManager.getView(titlebarViewId)!;
     const view = viewManager.getView(viewId)!;
+
+    // Apply proxy + userAgent to per-app session
+    const appSession = session.fromPartition(`persist:webapp-${appId}`);
+    await settingsService.applyProxyToSession(appSession);
+    const userAgent = settingsService.getSettingsSync().userAgent;
+    if (userAgent) { appSession.setUserAgent(userAgent); }
 
     // ── Create hidden window, attach views, then show ─────────────────────
     // Set unique AppUserModelId for independent taskbar icon (Windows)
