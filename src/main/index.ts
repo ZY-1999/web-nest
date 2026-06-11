@@ -24,6 +24,12 @@ function parseOpenAppArg(argv: string[] = process.argv): string | null {
   return arg.slice('--open-app='.length) || null;
 }
 
+/** Launch management window + tray (services are registered once at app ready). */
+async function launchManagementWindow(): Promise<void> {
+  await createMainWindow();
+  appTray.create();
+}
+
 function main(): void {
   // ── Phase 1: Pre-app-ready 基础设施 ──────────────────────────────────
   app.setPath('sessionData', paths.getSessionDir());
@@ -69,16 +75,16 @@ function main(): void {
       if (mainWin) {
         mainWin.show();
       } else {
-        // No main window (shortcut mode) — create one for the user
-        await createMainWindow();
-        appTray.create();
-        registerMainServices();
+        await launchManagementWindow();
       }
     }
   });
 
   // ── Phase 4: App ready 后初始化 ──────────────────────────────────────
   app.whenReady().then(async () => {
+    // Register IPC handlers BEFORE any window creation, so renderers never race
+    registerMainServices();
+
     // Restore services from persisted settings (safe to call setSettingsSync now)
     themeService.init();
     i18nService.init();
@@ -90,7 +96,6 @@ function main(): void {
 
     if (openAppId) {
       // Shortcut mode: open target web app without management window
-      registerMainServices();
       try {
         await webAppService.openWebApp(openAppId);
         log.info('Shortcut mode: opened web app', openAppId);
@@ -103,10 +108,7 @@ function main(): void {
     }
 
     // Normal mode: launch with management window
-    await createMainWindow();
-    appTray.create();
-
-    registerMainServices();
+    await launchManagementWindow();
 
     initUpdater({
       updateServerURL: process.env.UPDATE_SERVER_URL ?? '',
