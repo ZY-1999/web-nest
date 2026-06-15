@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { app, session } from 'electron';
-import { SettingsApi } from '@/shared/services/settingsApi';
+import { app, net, session } from 'electron';
+import { SettingsApi, type ProxyTestConfig, type ProxyTestResult } from '@/shared/services/settingsApi';
 import { DEFAULT_SETTINGS, type AppSettings, type SettingsPatch } from '@/shared/settings';
 import { Singleton } from '@/shared/utils/singleton';
 import { logger } from '@/shared/utils/log';
@@ -63,6 +63,69 @@ class SettingsService extends SettingsApi {
       log.debug('Proxy applied to session');
     } catch (error) {
       log.warn('Failed to apply proxy to session:', error);
+    }
+  }
+
+  async testProxy(config: ProxyTestConfig): Promise<ProxyTestResult> {
+    if (config.mode === 'none' || !config.host || !config.port) {
+      return { ok: false, error: 'No proxy configured' };
+    }
+
+    const addr = `${config.host}:${config.port}`;
+    const proxyRules = config.mode === 'socks5'
+      ? `socks=${addr}`
+      : `http=${addr};https=${addr}`;
+
+    // Use a temporary session to avoid affecting the default session
+    const partition = `proxy-test-${Date.now()}`;
+    const tempSession = session.fromPartition(partition);
+    const start = Date.now();
+
+    // Cleanup helper: always clear the temp session after test completes
+    const cleanup = () => {
+      session.fromPartition(partition).clearStorageData().catch(() => {});
+    };
+
+    try {
+      await tempSession.setProxy({ mode: 'fixed_servers', proxyRules });
+
+      return new Promise<ProxyTestResult>((resolve) => {
+        let settled = false;
+
+        const settle = (result: ProxyTestResult) => {
+          if (settled) { return; }
+          settled = true;
+          clearTimeout(timer);
+          resolve(result);
+          cleanup();
+        };
+
+        const timer = setTimeout(() => {
+          settle({ ok: false, error: 'Connection timed out' });
+          request.abort();
+        }, 5000);
+
+        const request = net.request({
+          url: 'https://www.google.com/generate_204',
+          session: tempSession,
+        });
+
+        request.on('response', (response) => {
+          settle({
+            ok: response.statusCode === 204,
+            latency: Date.now() - start,
+          });
+        });
+
+        request.on('error', (error) => {
+          settle({ ok: false, error: error.message });
+        });
+
+        request.end();
+      });
+    } catch (e) {
+      cleanup();
+      return { ok: false, error: String(e) };
     }
   }
 
