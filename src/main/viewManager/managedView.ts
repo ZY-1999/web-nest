@@ -1,8 +1,11 @@
 import { LoadURLOptions, WebContentsView, WebPreferences } from 'electron';
 import { TypedEmitter } from '@/shared/utils/typedEmitter';
 import { Channel } from '@/shared/channel';
+import { logger } from '@/shared/utils/log';
 import type { ViewState, ViewType, ManagedViewEventMap } from '@/shared/view';
 import type { ManagedView as IManagedView } from './types';
+
+const log = logger(__SOURCE_FILE__);
 
 export class ManagedView extends TypedEmitter<ManagedViewEventMap> implements IManagedView {
   readonly id: string;
@@ -53,7 +56,35 @@ export class ManagedView extends TypedEmitter<ManagedViewEventMap> implements IM
     const focusHandler = () => this.emit('state-changed', this.state);
     const blurHandler = () => this.emit('state-changed', this.state);
 
+    // Load-failure / renderer-crash are logged for diagnostics only — no recovery.
+    // Keeps white-screen investigations traceable in ~/.web-nest/log/main.log.
+    const failLoadHandler = (
+      _event: unknown,
+      errorCode: unknown,
+      errorDescription: unknown,
+      validatedURL: unknown,
+    ) => {
+      const wc = this.webContentsView.webContents;
+      log.error('View did-fail-load', {
+        viewId: this.id,
+        url: wc.isDestroyed() ? '' : wc.getURL(),
+        validatedURL,
+        errorCode,
+        errorDescription,
+      });
+    };
+    const renderGoneHandler = (_event: unknown, details: unknown) => {
+      const { reason, exitCode } = (details ?? {}) as { reason?: unknown; exitCode?: unknown };
+      log.error('View render-process-gone', {
+        viewId: this.id,
+        reason,
+        exitCode,
+      });
+    };
+
     this.subscribeToWebContents('did-finish-load', finishLoadHandler);
+    this.subscribeToWebContents('did-fail-load', failLoadHandler);
+    this.subscribeToWebContents('render-process-gone', renderGoneHandler);
     this.subscribeToWebContents('focus', focusHandler);
     this.subscribeToWebContents('blur', blurHandler);
   }

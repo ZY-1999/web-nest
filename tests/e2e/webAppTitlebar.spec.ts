@@ -172,3 +172,28 @@ test('theme toggle switches icon', async ({ electronApp }) => {
   // Verify the toggle is still functional by clicking again
   await expect(toggleBtn).toBeEnabled();
 });
+
+test('devtools button toggles devtools on the content view', async ({ electronApp }) => {
+  await openWebApp(electronApp, pageAUrl);
+  const titlebar = await findTitlebarPage(electronApp);
+
+  // Inspect the content view's DevTools state directly (immune to other windows' devtools)
+  const contentDevToolsOpen = () =>
+    electronApp.evaluate(async ({ webContents }, urlSub: string) => {
+      const content = webContents
+        .getAllWebContents()
+        .find((wc) => wc.getURL().includes(urlSub));
+      return content ? content.isDevToolsOpened() : false;
+    }, 'page-a.html');
+
+  // Initially closed
+  expect(await contentDevToolsOpen()).toBe(false);
+
+  // First click opens DevTools on the content view (not the titlebar view)
+  await titlebar.locator('[data-testid="titlebar-devtools"]').click();
+  await expect.poll(contentDevToolsOpen, { timeout: 10000 }).toBe(true);
+
+  // Second click closes it (toggle behaviour)
+  await titlebar.locator('[data-testid="titlebar-devtools"]').click();
+  await expect.poll(contentDevToolsOpen, { timeout: 10000 }).toBe(false);
+});

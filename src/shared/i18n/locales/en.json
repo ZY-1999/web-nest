@@ -24,7 +24,8 @@
     "back": "Back",
     "forward": "Forward",
     "refresh": "Refresh",
-    "copyUrl": "Copy URL"
+    "copyUrl": "Copy URL",
+    "devtools": "DevTools"
   },
   "settings": {
     "title": "Settings",

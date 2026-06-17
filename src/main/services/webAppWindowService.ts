@@ -44,6 +44,11 @@ export class WebAppWindowService extends WebAppWindowApi {
     if (!wc.isDestroyed()) { clipboard.writeText(wc.getURL()); }
   }
 
+  async toggleDevTools(): Promise<void> {
+    const wc = this.context.contentView.webContents;
+    if (!wc.isDestroyed()) { this.context.contentView.toggleDevTools(); }
+  }
+
   updateFaviconDataUrl(dataUrl: string): void {
     this.context.faviconDataUrl = dataUrl;
   }

@@ -73,12 +73,35 @@ export const mockBaseWindow = {
   id: 1,
 };
 
+// Event-emitting webContents mock: captures `.on` handlers and exposes `emit`
+// so tests can drive webContents events (did-fail-load, render-process-gone, …).
+const webContentsHandlers = new Map<string, Set<(...args: unknown[]) => void>>();
+
 export const mockWebContents = {
   send: vi.fn(),
-  on: vi.fn(),
-  off: vi.fn(),
+  on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+    let set = webContentsHandlers.get(event);
+    if (!set) {
+      set = new Set();
+      webContentsHandlers.set(event, set);
+    }
+    set.add(handler);
+  }),
+  off: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+    webContentsHandlers.get(event)?.delete(handler);
+  }),
   once: vi.fn(),
-  removeAllListeners: vi.fn(),
+  removeAllListeners: vi.fn((event?: string) => {
+    if (event) {
+      webContentsHandlers.delete(event);
+    } else {
+      webContentsHandlers.clear();
+    }
+  }),
+  /** Test-only: dispatch a webContents event to all registered handlers. */
+  emit: vi.fn((event: string, ...args: unknown[]) => {
+    webContentsHandlers.get(event)?.forEach((handler) => handler(...args));
+  }),
   getURL: vi.fn(() => 'http://localhost:5173'),
   loadURL: vi.fn(() => Promise.resolve()),
   loadFile: vi.fn(() => Promise.resolve()),

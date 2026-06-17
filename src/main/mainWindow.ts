@@ -9,6 +9,8 @@ import { channel } from '@/shared/channel';
 import { logger } from '@/shared/utils/log';
 import { themeService } from './services/themeService';
 import { getTitleBarOptions } from '@/shared/titlebar';
+import { serviceRegistry } from '@/shared/serviceRegistry';
+import { MainWindowService } from './services/mainWindowService';
 
 const log = logger(__SOURCE_FILE__);
 
@@ -59,6 +61,9 @@ export async function createMainWindow() {
 
   const view = viewManager.getView(viewId)!;
   view.attachTo(win, { ...win.getContentBounds(), x: 0, y: 0 });
+
+  // Register main-window services (DevTools toggle) on the main channel
+  serviceRegistry.implementService(channel, new MainWindowService({ mainView: view }));
 
   // Open DevTools in development mode
   if (isDev()) {

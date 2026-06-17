@@ -24,7 +24,8 @@
     "back": "后退",
     "forward": "前进",
     "refresh": "刷新",
-    "copyUrl": "复制 URL"
+    "copyUrl": "复制 URL",
+    "devtools": "开发者工具"
   },
   "settings": {
     "title": "设置",

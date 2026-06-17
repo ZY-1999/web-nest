@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings } from 'lucide-react';
+import { Settings, Terminal } from 'lucide-react';
 import { Button } from '@/renderer/components/ui/button';
 import { ThemeToggle } from '../ThemeToggle';
 import { SettingsDialog } from '../SettingsDialog';
+import { mainWindowApi } from '@/shared/services/mainWindowApi';
 
 export function TitleBar() {
   const { t } = useTranslation();
@@ -17,6 +18,17 @@ export function TitleBar() {
         </div>
         <div className="titlebar-center">{t('titlebar.appName')}</div>
         <div className="titlebar-right flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => { void mainWindowApi.toggleDevTools(); }}
+            className="h-7 w-7 outline-none focus-visible:ring-0"
+            aria-label={t('titlebar.devtools')}
+            title={t('titlebar.devtools')}
+            data-testid="titlebar-devtools"
+          >
+            <Terminal className="h-4 w-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"

@@ -22,6 +22,8 @@ export abstract class WebAppWindowApi {
   abstract reload(): Promise<void>;
   /** Copy current URL to system clipboard. */
   abstract copyUrl(): Promise<void>;
+  /** Toggle DevTools on the content view. */
+  abstract toggleDevTools(): Promise<void>;
 }
 
 export const webAppWindowApi = serviceRegistry.defineApi(WebAppWindowApi, 'main');
