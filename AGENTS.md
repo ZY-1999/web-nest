@@ -78,25 +78,6 @@
 - **`ViewManager`** (`src/main/viewManager/`): WebContentsView 管理，内置通道通信和广播
 - **Preload Args** (`src/shared/preload/args.ts`): 主进程通过 `buildPreloadArgs()` 构建 `additionalArguments`，preload 通过 `parsePreloadArgs()` 解析，对称 API
 
-## 修改代码前必须阅读
-
-按优先级排列，Agent 在修改对应模块前**必须**先读这些文件：
-
-### 全局必读
-
-| 文件                 | 理由                     |
-| -------------------- | ------------------------ |
-| `AGENTS.md`          | 本文档，项目协作规范     |
-| `docs/code-style.md` | 代码风格完整参考         |
-| `package.json`       | 依赖、脚本、包管理器版本 |
-
-### 理解全貌
-
-| 文件                                          | 理由             |
-| --------------------------------------------- | ---------------- |
-| `docs/codemap/*_electron-template项目总图.md` | 项目总览 CodeMap |
-| `README.md`                                   | 模板使用说明     |
-
 ### 构建流程
 
 `pnpm run build` 执行步骤：
@@ -214,3 +195,21 @@ GitHub Actions CI 包含三个 job：
 - `待补充` **模板使用者的迁移指南**: 版本升级时如何处理 breaking change
 - `当前约定` **macOS 签名/公证**: `electron-builder.config.mjs` 中已预留但未配置
 - `当前约定` **Linux 打包**: CI 中有构建但无打包 job
+
+## Agent skills
+
+### Issue tracker
+
+Issues 以本地 markdown 形式存放在仓库根的 `.scratch/`（一个 feature 一个目录，下含 `specs/<NN>-<slug>.md`），承载 `spec` / `prd` / `bug` 三类工作。详见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+五个 triage 角色各以其名称为 label（`needs-triage` / `needs-info` / `ready-for-agent` / `ready-for-human` / `wontfix`），写在 issue 的 `Status:` 行。详见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+Single-context 布局：根目录 `CONTEXT.md` + `docs/adr/`（尚未创建，由 `/domain-modeling` 按需生成）。详见 `docs/agents/domain.md`。
+
+### CodeMap
+
+项目级代码地形索引在 `docs/codemap/`（项目 map 一次生成；feature map 用 `/codemap` 按需补充或刷新；不确定 map 是否仍准确时跑 `/codemap` drift-check，报告 drift 则更新对应 map）。
