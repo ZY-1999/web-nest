@@ -131,6 +131,11 @@ function main(): void {
       app.quit();
     }
   });
+
+  // before-quit 兜底扫杀所有服务型 app 后台进程（Spec 05，AC3）
+  app.on('before-quit', () => {
+    webAppService.killAllServiceProcesses();
+  });
 }
 
 main();

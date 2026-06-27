@@ -55,6 +55,43 @@ describe('appConfigService', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  it('saveApps and loadApps round-trip with service config (服务型 web app)', () => {
+    const dir = `/tmp/web-nest-test-${Date.now()}`;
+    fs.mkdirSync(dir, { recursive: true });
+
+    const appsWithService: PersistedApp[] = [
+      {
+        id: 'app-svc',
+        url: 'http://localhost:3000',
+        title: 'Dev',
+        faviconUrl: '',
+        service: { command: 'npm run dev', shell: 'auto' },
+      },
+    ];
+    appConfigService.saveApps(dir, appsWithService);
+    const loaded = appConfigService.loadApps(dir);
+
+    expect(loaded).toEqual(appsWithService);
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('loadApps treats missing service field as 普通型 (向后兼容)', () => {
+    const dir = `/tmp/web-nest-test-${Date.now()}`;
+    fs.mkdirSync(dir, { recursive: true });
+    // Legacy config: apps with no service field (pre-服务型 era)
+    const legacyJson = JSON.stringify([
+      { id: 'legacy', url: 'https://example.com', title: 'Legacy', faviconUrl: 'x.ico' },
+    ]);
+    fs.writeFileSync(path.join(dir, 'apps.config'), legacyJson, 'utf-8');
+
+    const loaded = appConfigService.loadApps(dir);
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0]!.service).toBeUndefined();
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   it('saveApps overwrites existing data', () => {
     const dir = `/tmp/web-nest-test-${Date.now()}`;
     fs.mkdirSync(dir, { recursive: true });

@@ -2,7 +2,9 @@ import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
 import { app, session, nativeImage } from 'electron';
-import { WebAppMainApi, WebAppState } from '@/shared/services';
+import { WebAppMainApi, WebAppState, AppServiceConfig, ServiceState } from '@/shared/services';
+import { launchServiceApp, type ServiceLaunchTarget, type ServiceLaunchHandle } from '@/main/services/serviceAppLauncher';
+import { killTree, type SpawnResult } from '@/main/services/processManager';
 import { Singleton } from '@/shared/utils/singleton';
 import { logger } from '@/shared/utils/log';
 import { windowManager } from '@/main/windowManager';
@@ -51,6 +53,13 @@ interface WebAppEntry {
   url: string;
   title: string;
   faviconUrl: string;
+  /** 服务型 app 的本地服务配置；普通型为 undefined。 */
+  service?: AppServiceConfig;
+  /** 服务型 app 状态机字段（Spec 04 启动协调器产物；Spec 05 清理消费）。 */
+  serviceProcess?: SpawnResult | null;
+  serviceState?: ServiceState;
+  serviceError?: string;
+  serviceCleanup?: () => void;
   isClosing?: boolean;
 }
 
@@ -79,18 +88,57 @@ export class WebAppService extends WebAppMainApi {
         url: entry.url,
         title: entry.title,
         faviconUrl: entry.faviconUrl,
+        service: entry.service,
       });
     }
 
     appConfigService.saveApps(configDir, Array.from(persistedMap.values()));
   }
 
+  /** Shell 空值兜底为 'auto'（服务型 app 持久化前归一化）。 */
+  private normalizeService(service: AppServiceConfig): AppServiceConfig {
+    return {
+      command: service.command,
+      shell: service.shell?.trim() ? service.shell : 'auto',
+    };
+  }
+
+  /** 校验服务型配置：command 非空 + url 非空（持久化层双保护之一，表单层在 Spec 07）。 */
+  private validateService(service: AppServiceConfig | undefined, url: string): void {
+    if (!service) { return; }
+    if (!service.command.trim()) {
+      throw new Error(i18nService.t('errors.serviceCommandRequired'));
+    }
+    if (!url.trim()) {
+      throw new Error(i18nService.t('errors.serviceUrlRequired'));
+    }
+  }
+
   /** Destroy content view + titlebar view + window resources for an in-memory entry. */
   private destroyEntry(entry: WebAppEntry) {
+    // 服务型 app：清理启动协调器资源（定时器）
+    entry.serviceCleanup?.();
+    // 强杀后台进程树（Spec 05，在 content view 销毁前；killTree try-catch 保护）
+    this.killServiceProcess(entry);
     viewManager.destroyView(entry.viewId);
     viewManager.destroyView(entry.titlebarViewId);
     windowManager.destroyWindow(entry.windowId);
     this.apps.delete(entry.appId);
+  }
+
+  /** 强杀单个 entry 的后台服务进程（幂等：kill 后 serviceProcess 置空，killTree 本身也 WeakSet 幂等）。 */
+  private killServiceProcess(entry: WebAppEntry): void {
+    if (entry.serviceProcess?.child) {
+      killTree(entry.serviceProcess.child);
+      entry.serviceProcess = null;
+    }
+  }
+
+  /** before-quit 兜底扫杀：遍历所有服务型 app 的后台进程强杀进程树（Spec 05，AC3）。 */
+  killAllServiceProcesses(): void {
+    for (const entry of this.apps.values()) {
+      this.killServiceProcess(entry);
+    }
   }
 
   /** Clear all session data for a web app (cookies, cache, storage). */
@@ -127,6 +175,7 @@ export class WebAppService extends WebAppMainApi {
     url: string,
     faviconUrl: string,
     title: string,
+    service?: AppServiceConfig,
   ): Promise<WebAppEntry> {
     // Use cached favicon for initial icon (avoids network wait)
     const cachedFaviconDataUrl = faviconService.getCachedFaviconDataUrlSync(appId);
@@ -299,6 +348,9 @@ export class WebAppService extends WebAppMainApi {
       onFaviconUpdated(urls);
     });
 
+    // 服务型 app 启动协调器 handle（closed 时清理定时器；进程 kill 在 Spec 05 接通）
+    let serviceLaunchHandle: ServiceLaunchHandle | undefined;
+
     // Cleanup on window close — use 'close' event (synchronous) to mark entry,
     // 'closed' event (async) to destroy resources.
     nativeWindow.on('close', () => {
@@ -309,6 +361,11 @@ export class WebAppService extends WebAppMainApi {
     });
 
     nativeWindow.on('closed', () => {
+      const closedEntry = this.apps.get(appId);
+      // 服务型 app：强杀后台进程树（Spec 05，在 content view 销毁前；killTree try-catch 保护）
+      if (closedEntry) { this.killServiceProcess(closedEntry); }
+      // 清理启动协调器资源（定时器）
+      serviceLaunchHandle?.cleanup();
       // Destroy content view first, then titlebar (same order as destroyEntry)
       viewManager.destroyView(viewId);
       viewManager.destroyView(titlebarViewId);
@@ -319,14 +376,67 @@ export class WebAppService extends WebAppMainApi {
 
     const loadedTitle = view.webContents.getTitle() || title;
 
-    return { appId, windowId, viewId, titlebarViewId, url, title: loadedTitle, faviconUrl };
+    // 服务型 app：spawn command + URL 自适应重试 + 状态机（Spec 04，消费 Spec 02/03）
+    let initialServiceState: ServiceState | undefined;
+    let initialServiceError: string | undefined;
+    const entryRef: { current?: WebAppEntry } = {};
+    if (service) {
+      const target: ServiceLaunchTarget = {
+        url,
+        loadUrl: (u: string) => {
+          if (!view.webContents.isDestroyed()) { return view.webContents.loadURL(u); }
+        },
+        onDidFailLoad: (l: () => void) => { view.webContents.on('did-fail-load', l); },
+        onDidFinishLoad: (l: () => void) => { view.webContents.on('did-finish-load', l); },
+        isDestroyed: () => view.webContents.isDestroyed(),
+      };
+      serviceLaunchHandle = await launchServiceApp(service, target, {
+        onStateChange: (state, err) => {
+          if (entryRef.current) {
+            entryRef.current.serviceState = state;
+            entryRef.current.serviceError = err;
+          } else {
+            initialServiceState = state;
+            initialServiceError = err;
+          }
+          windowService.updateServiceState(state, err);
+          // 推送 serviceState 到标题栏（Spec 06，复用 url-changed 通道）
+          if (!view.webContents.isDestroyed()) {
+            viewManager
+              .requestTo(titlebarViewId, 'url-changed', windowService.buildNavState())
+              .catch(() => { /* titlebar view may be destroyed */ });
+          }
+        },
+      });
+    }
+
+    const entry: WebAppEntry = {
+      appId,
+      windowId,
+      viewId,
+      titlebarViewId,
+      url,
+      title: loadedTitle,
+      faviconUrl,
+      service,
+      serviceProcess: serviceLaunchHandle?.process ?? undefined,
+      serviceCleanup: serviceLaunchHandle?.cleanup,
+      serviceState: initialServiceState,
+      serviceError: initialServiceError,
+    };
+    entryRef.current = entry;
+    return entry;
   }
 
-  async createWebApp(url: string): Promise<WebAppState> {
+  async createWebApp(url: string, service?: AppServiceConfig | null): Promise<WebAppState> {
+    // service 存在时校验 command 非空 + url 非空；shell 空兜底为 'auto'
+    const normalizedService = service ? this.normalizeService(service) : undefined;
+    this.validateService(normalizedService, url);
+
     const appId = generateWebAppId();
     const faviconUrl = googleFaviconUrl(new URL(url).hostname);
 
-    const entry = await this.createWindowForApp(appId, url, faviconUrl, url);
+    const entry = await this.createWindowForApp(appId, url, faviconUrl, url, normalizedService);
 
     this.apps.set(appId, entry);
     this.persist();
@@ -334,8 +444,8 @@ export class WebAppService extends WebAppMainApi {
     // Async favicon fetch already triggered in createWindowForApp; use sync cache here
     const faviconDataUrl = faviconService.getCachedFaviconDataUrlSync(appId) ?? '';
 
-    log.info('Web app created:', appId, url);
-    return { id: appId, url: entry.url, title: entry.title, faviconUrl, faviconDataUrl };
+    log.info('Web app created:', appId, url, normalizedService ? '(服务型)' : '(普通型)');
+    return { id: appId, url: entry.url, title: entry.title, faviconUrl, faviconDataUrl, service: entry.service };
   }
 
   async closeWebApp(id: string): Promise<void> {
@@ -407,13 +517,17 @@ export class WebAppService extends WebAppMainApi {
         if (!faviconDataUrl) {
           faviconService.fetchFaviconDataUrl(id, existing.faviconUrl).catch(() => {});
         }
-        return { id: existing.appId, url: existing.url, title: existing.title, faviconUrl: existing.faviconUrl, faviconDataUrl };
+        return { id: existing.appId, url: existing.url, title: existing.title, faviconUrl: existing.faviconUrl, faviconDataUrl, service: existing.service };
       }
-      // Stale entry: window/view is closing or already destroyed
+      // Stale entry: window/view is closing or already destroyed.
+      // Kill any lingering service process before dropping the entry — covers the
+      // narrow race where the window closed during createWindowForApp (before the
+      // entry was registered), so the 'closed' handler couldn't find it to kill.
+      this.killServiceProcess(existing);
       this.apps.delete(id);
     }
 
-    const entry = await this.createWindowForApp(id, appData.url, appData.faviconUrl, appData.title);
+    const entry = await this.createWindowForApp(id, appData.url, appData.faviconUrl, appData.title, appData.service);
 
     this.apps.set(id, entry);
 
@@ -424,7 +538,7 @@ export class WebAppService extends WebAppMainApi {
     }
 
     log.info('Web app opened:', id);
-    return { id, url: entry.url, title: entry.title, faviconUrl: appData.faviconUrl, faviconDataUrl };
+    return { id, url: entry.url, title: entry.title, faviconUrl: appData.faviconUrl, faviconDataUrl, service: entry.service };
   }
 
   async listWebApps(): Promise<WebAppState[]> {
@@ -436,7 +550,7 @@ export class WebAppService extends WebAppMainApi {
       const entry = this.apps.get(app.id);
       const faviconDataUrl = faviconService.getCachedFaviconDataUrlSync(app.id) ?? '';
       if (entry) {
-        results.push({ id: entry.appId, url: entry.url, title: entry.title, faviconUrl: entry.faviconUrl, faviconDataUrl });
+        results.push({ id: entry.appId, url: entry.url, title: entry.title, faviconUrl: entry.faviconUrl, faviconDataUrl, service: entry.service });
       } else {
         results.push({ ...app, faviconDataUrl });
       }
@@ -448,7 +562,10 @@ export class WebAppService extends WebAppMainApi {
     return results;
   }
 
-  async updateWebApp(id: string, data: { title?: string; url?: string }): Promise<WebAppState> {
+  async updateWebApp(
+    id: string,
+    data: { title?: string; url?: string; service?: AppServiceConfig | null },
+  ): Promise<WebAppState> {
     const entry = this.apps.get(id);
     if (entry) {
       if (data.title !== undefined) {
@@ -463,12 +580,18 @@ export class WebAppService extends WebAppMainApi {
           entry.title = view.webContents.getTitle() || data.url;
         }
       }
+      // service 三态：undefined=不动，null=清除（转普通型），object=设置（转服务型）
+      if (data.service !== undefined) {
+        const newService = data.service === null ? undefined : this.normalizeService(data.service);
+        this.validateService(newService, data.url ?? entry.url);
+        entry.service = newService;
+      }
       this.persist();
       const faviconDataUrl = faviconService.getCachedFaviconDataUrlSync(id) ?? '';
       if (!faviconDataUrl) {
         faviconService.fetchFaviconDataUrl(id, entry.faviconUrl).catch(() => {});
       }
-      return { id: entry.appId, url: entry.url, title: entry.title, faviconUrl: entry.faviconUrl, faviconDataUrl };
+      return { id: entry.appId, url: entry.url, title: entry.title, faviconUrl: entry.faviconUrl, faviconDataUrl, service: entry.service };
     }
 
     // Update persisted-only app
@@ -484,6 +607,15 @@ export class WebAppService extends WebAppMainApi {
     if (data.url !== undefined) {
       persisted[idx].url = data.url;
       persisted[idx].faviconUrl = googleFaviconUrl(new URL(data.url).hostname);
+    }
+    if (data.service !== undefined) {
+      if (data.service === null) {
+        delete persisted[idx].service;
+      } else {
+        const normalized = this.normalizeService(data.service);
+        this.validateService(normalized, data.url ?? persisted[idx].url);
+        persisted[idx].service = normalized;
+      }
     }
     appConfigService.saveApps(configDir, persisted);
 

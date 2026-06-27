@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight, RefreshCw, Copy } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { NavigationState } from '@/shared/services/webAppWindowApi';
 import { webAppWindowApi } from '@/shared/services/webAppWindowApi';
+import { ServiceStateIndicator } from './ServiceStateIndicator';
 
 interface NavRowProps {
   navState: NavigationState;
@@ -64,6 +65,7 @@ export function NavRow({ navState, onNavStateChange }: NavRowProps) {
       <span className="titlebar-url" data-testid="titlebar-url" title={navState.url}>
         {navState.url}
       </span>
+      <ServiceStateIndicator serviceState={navState.serviceState} serviceError={navState.serviceError} />
       <button
         className="titlebar-nav-btn"
         onClick={handleCopy}

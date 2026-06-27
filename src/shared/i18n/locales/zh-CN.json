@@ -15,7 +15,21 @@
     "removeShortcut": "移除快捷方式",
     "add": "添加",
     "emptyMessage": "暂无 Web 应用，点击 + 添加。",
-    "webCatalog": "Web 应用目录"
+    "webCatalog": "Web 应用目录",
+    "serviceToggle": "启动本地服务（高级）",
+    "serviceCommand": "服务命令",
+    "serviceCommandPlaceholder": "如 npm run dev",
+    "serviceShellLabel": "Shell",
+    "serviceShell": {
+      "auto": "自动检测",
+      "bash": "Git Bash",
+      "cmd": "命令提示符 (cmd)",
+      "powershell": "PowerShell",
+      "custom": "自定义"
+    },
+    "serviceShellCustomPath": "自定义 shell 路径",
+    "serviceShellCustomPlaceholder": "如 C:\\Program Files\\Git\\bin\\bash.exe",
+    "serviceBadge": "服务型应用"
   },
   "titlebar": {
     "appName": "web-nest",
@@ -25,7 +39,13 @@
     "forward": "前进",
     "refresh": "刷新",
     "copyUrl": "复制 URL",
-    "devtools": "开发者工具"
+    "devtools": "开发者工具",
+    "serviceState": {
+      "starting": "启动中",
+      "running": "运行中",
+      "failed": "服务失败",
+      "stopped": "已停止"
+    }
   },
   "settings": {
     "title": "设置",
@@ -62,6 +82,8 @@
     "webAppNotFound": "未找到 Web 应用：{{id}}",
     "shortcutNotSupported": "桌面快捷方式仅支持 Windows",
     "failedToOpenApp": "无法打开应用：{{id}}",
-    "shortcutDescription": "在 Web Nest 中打开 {{title}}"
+    "shortcutDescription": "在 Web Nest 中打开 {{title}}",
+    "serviceCommandRequired": "服务命令不能为空",
+    "serviceUrlRequired": "服务型应用需要有效的 URL"
   }
 }

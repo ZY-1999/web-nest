@@ -11,23 +11,160 @@ import {
 import { useWebAppStore } from '../../stores/webAppStore'
 import { FaviconImg } from '@/renderer/components/FaviconImg'
 import { webAppMainApi } from '@/shared/services'
-import { Plus, MoreVertical, Pencil, Trash2, Pin, PinOff } from 'lucide-react'
+import { Plus, MoreVertical, Pencil, Trash2, Pin, PinOff, Terminal } from 'lucide-react'
+import type { AppServiceConfig } from '@/shared/services/webAppApi'
+
+/** shell 下拉选项（与 shellDetector.resolveShell 接受的命名 shell 对齐；custom=用户填路径）。 */
+type ShellOption = 'auto' | 'bash' | 'cmd' | 'powershell' | 'custom'
+
+const SHELL_OPTIONS: ShellOption[] = ['auto', 'bash', 'cmd', 'powershell', 'custom']
+
+/**
+ * 把表单的 shellSelect + customPath 解析为落盘的 shell 字符串。
+ * custom 时空路径兜底为 'auto'（避免把字面量 'custom' 当 shell 传给 shellDetector）。
+ */
+function resolveShellForSave(select: ShellOption, customPath: string): string {
+  return select === 'custom' ? (customPath.trim() || 'auto') : select
+}
+
+/**
+ * 把落盘的 shell 字符串反解为表单状态：命名 shell 直接映射，其余视为 custom + 路径。
+ */
+function shellToFormState(shell: string): { select: ShellOption; customPath: string } {
+  if (SHELL_OPTIONS.includes(shell as ShellOption) && shell !== 'custom') {
+    return { select: shell as ShellOption, customPath: '' }
+  }
+  return { select: 'custom', customPath: shell }
+}
+
+/**
+ * AddDialog/EditDialog 共用的服务配置区（开关 + command + shell 下拉 + 自定义路径）。
+ * 受控组件——状态由父 dialog 持有，本组件只负责渲染与 onChange 回传。
+ */
+function ServiceConfigFields({
+  enabled,
+  command,
+  shellSelect,
+  customPath,
+  commandError,
+  onToggle,
+  onCommandChange,
+  onShellChange,
+  onCustomPathChange,
+}: {
+  enabled: boolean
+  command: string
+  shellSelect: ShellOption
+  customPath: string
+  commandError: string | null
+  onToggle: (enabled: boolean) => void
+  onCommandChange: (value: string) => void
+  onShellChange: (value: ShellOption) => void
+  onCustomPathChange: (value: string) => void
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+      <label className="flex items-center gap-2 text-sm font-medium">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => onToggle(e.target.checked)}
+          className="h-4 w-4"
+          data-testid="service-toggle"
+        />
+        {t('catalog.serviceToggle')}
+      </label>
+
+      {enabled && (
+        <div className="space-y-2 pl-6" data-testid="service-fields">
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">{t('catalog.serviceCommand')}</label>
+            <input
+              type="text"
+              value={command}
+              onChange={(e) => onCommandChange(e.target.value)}
+              placeholder={t('catalog.serviceCommandPlaceholder')}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              data-testid="service-command-input"
+            />
+            {commandError && (
+              <p className="mt-1 text-xs text-red-500" data-testid="service-command-error">
+                {commandError}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">{t('catalog.serviceShellLabel')}</label>
+            <select
+              value={shellSelect}
+              onChange={(e) => onShellChange(e.target.value as ShellOption)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              data-testid="service-shell-select"
+            >
+              {SHELL_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {t(`catalog.serviceShell.${opt}`)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {shellSelect === 'custom' && (
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">{t('catalog.serviceShellCustomPath')}</label>
+              <input
+                type="text"
+                value={customPath}
+                onChange={(e) => onCustomPathChange(e.target.value)}
+                placeholder={t('catalog.serviceShellCustomPlaceholder')}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                data-testid="service-custom-path-input"
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function AddDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { t } = useTranslation()
   const { addApp } = useWebAppStore()
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
+  const [serviceEnabled, setServiceEnabled] = useState(false)
+  const [command, setCommand] = useState('')
+  const [shellSelect, setShellSelect] = useState<ShellOption>('auto')
+  const [customPath, setCustomPath] = useState('')
+
+  const commandError = serviceEnabled && !command.trim() ? t('errors.serviceCommandRequired') : null
+  const canSubmit = !!url.trim() && !commandError
+
+  const resetForm = () => {
+    setUrl('')
+    setServiceEnabled(false)
+    setCommand('')
+    setShellSelect('auto')
+    setCustomPath('')
+  }
 
   const handleSubmit = async () => {
     const trimmed = url.trim()
-    if (!trimmed) { return }
+    if (!trimmed || commandError) { return }
+
+    const service: AppServiceConfig | null = serviceEnabled
+      ? { command: command.trim(), shell: resolveShellForSave(shellSelect, customPath) }
+      : null
 
     setLoading(true)
     try {
-      const app = await webAppMainApi.createWebApp(trimmed)
+      const app = await webAppMainApi.createWebApp(trimmed, service)
       addApp(app)
-      setUrl('')
+      resetForm()
       onOpenChange(false)
     } catch (error) {
       console.error('Failed to create web app:', error)
@@ -55,8 +192,19 @@ function AddDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open:
           className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           data-testid="add-url-input"
         />
+        <ServiceConfigFields
+          enabled={serviceEnabled}
+          command={command}
+          shellSelect={shellSelect}
+          customPath={customPath}
+          commandError={commandError}
+          onToggle={setServiceEnabled}
+          onCommandChange={setCommand}
+          onShellChange={setShellSelect}
+          onCustomPathChange={setCustomPath}
+        />
         <DialogFooter>
-          <Button onClick={handleSubmit} disabled={loading || !url.trim()} data-testid="add-submit">
+          <Button onClick={handleSubmit} disabled={loading || !canSubmit} data-testid="add-submit">
             {loading ? t('catalog.opening') : t('catalog.open')}
           </Button>
         </DialogFooter>
@@ -80,20 +228,47 @@ function EditDialog({
   const [title, setTitle] = useState('')
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
+  const [serviceEnabled, setServiceEnabled] = useState(false)
+  const [command, setCommand] = useState('')
+  const [shellSelect, setShellSelect] = useState<ShellOption>('auto')
+  const [customPath, setCustomPath] = useState('')
 
   React.useEffect(() => {
     if (app && open) {
       setTitle(app.title)
       setUrl(app.url)
+      // 回填服务配置：无 service → 开关 off；有 → 开关 on + command/shell 反解
+      if (app.service) {
+        setServiceEnabled(true)
+        setCommand(app.service.command)
+        const { select, customPath: cp } = shellToFormState(app.service.shell)
+        setShellSelect(select)
+        setCustomPath(cp)
+      } else {
+        setServiceEnabled(false)
+        setCommand('')
+        setShellSelect('auto')
+        setCustomPath('')
+      }
     }
   }, [app, open])
 
   if (!app) { return null }
 
+  const commandError = serviceEnabled && !command.trim() ? t('errors.serviceCommandRequired') : null
+  const canSubmit = !!url.trim() && !commandError
+
   const handleSave = async () => {
+    if (!url.trim() || commandError) { return }
+
+    // 开关 on → 设置/覆盖 service；off → 清除（转普通型）
+    const service: AppServiceConfig | null = serviceEnabled
+      ? { command: command.trim(), shell: resolveShellForSave(shellSelect, customPath) }
+      : null
+
     setLoading(true)
     try {
-      const updated = await webAppMainApi.updateWebApp(app.id, { title, url })
+      const updated = await webAppMainApi.updateWebApp(app.id, { title, url, service })
       updateApp(app.id, updated)
       onOpenChange(false)
     } catch (error) {
@@ -135,9 +310,20 @@ function EditDialog({
               data-testid="edit-url-input"
             />
           </div>
+          <ServiceConfigFields
+            enabled={serviceEnabled}
+            command={command}
+            shellSelect={shellSelect}
+            customPath={customPath}
+            commandError={commandError}
+            onToggle={setServiceEnabled}
+            onCommandChange={setCommand}
+            onShellChange={setShellSelect}
+            onCustomPathChange={setCustomPath}
+          />
         </div>
         <DialogFooter>
-          <Button onClick={handleSave} disabled={loading} data-testid="edit-submit">
+          <Button onClick={handleSave} disabled={loading || !canSubmit} data-testid="edit-submit">
             {loading ? t('catalog.saving') : t('catalog.save')}
           </Button>
         </DialogFooter>
@@ -152,7 +338,7 @@ function AppCard({
   onEdit,
   onDelete,
 }: {
-  app: { id: string; url: string; title: string; faviconDataUrl?: string }
+  app: { id: string; url: string; title: string; faviconDataUrl?: string; service?: AppServiceConfig }
   onOpen: () => void
   onEdit: () => void
   onDelete: () => void
@@ -201,9 +387,18 @@ function AppCard({
       className="group relative aspect-square flex flex-col items-center justify-center rounded-lg border border-border bg-card cursor-pointer transition-colors hover:bg-accent"
       onClick={onOpen}
     >
-      {/* Favicon: 36x36 white circle, 24x24 image */}
-      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white">
+      {/* Favicon: 36x36 white circle, 24x24 image; service app 加 Terminal 角标 */}
+      <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white">
         <FaviconImg appId={app.id} fallback={app.title} />
+        {app.service && (
+          <span
+            className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-white shadow-sm"
+            title={t('catalog.serviceBadge')}
+            data-testid="webapp-service-badge"
+          >
+            <Terminal className="h-2.5 w-2.5" />
+          </span>
+        )}
       </div>
 
       {/* Title */}

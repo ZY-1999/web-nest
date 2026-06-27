@@ -26,6 +26,29 @@ describe('WebAppService integration', () => {
     expect(state.faviconUrl).toContain('google.com/s2/favicons');
   });
 
+  it('createWebApp with service returns 服务型 state and persists service', async () => {
+    const state = await webAppService.createWebApp('http://localhost:3000', {
+      command: 'npm run dev',
+      shell: 'auto',
+    });
+
+    expect(state.url).toBe('http://localhost:3000');
+    expect(state.service).toEqual({ command: 'npm run dev', shell: 'auto' });
+
+    // 透传：listWebApps 也带 service
+    const apps = await webAppService.listWebApps();
+    expect(apps.find((a) => a.id === state.id)?.service).toEqual({
+      command: 'npm run dev',
+      shell: 'auto',
+    });
+  });
+
+  it('createWebApp without service returns 普通型 state (service undefined)', async () => {
+    const state = await webAppService.createWebApp('https://example.com');
+
+    expect(state.service).toBeUndefined();
+  });
+
   it('lists created web apps', async () => {
     const app1 = await webAppService.createWebApp('https://example.com');
     const app2 = await webAppService.createWebApp('https://github.com');
@@ -107,5 +130,77 @@ describe('WebAppService integration', () => {
     await expect(
       webAppService.updateWebApp('non-existent-id', { title: 'x' }),
     ).rejects.toThrow('Web app not found');
+  });
+
+  // ── Spec 01：服务型 web app 数据契约 ──────────────────────────────
+  it('updateWebApp service 三态：null=清除（转普通型）', async () => {
+    const created = await webAppService.createWebApp('http://localhost:3000', {
+      command: 'npm run dev',
+      shell: 'bash',
+    });
+    expect(created.service).toBeDefined();
+
+    const cleared = await webAppService.updateWebApp(created.id, { service: null });
+    expect(cleared.service).toBeUndefined();
+
+    // 持久化也清除：listWebApps 透传 undefined
+    const apps = await webAppService.listWebApps();
+    expect(apps.find((a) => a.id === created.id)?.service).toBeUndefined();
+  });
+
+  it('updateWebApp service 三态：undefined=不动', async () => {
+    const created = await webAppService.createWebApp('http://localhost:3000', {
+      command: 'npm run dev',
+      shell: 'bash',
+    });
+    // 只改 title，service 不传 → service 保持
+    const updated = await webAppService.updateWebApp(created.id, { title: 'New Title' });
+    expect(updated.title).toBe('New Title');
+    expect(updated.service).toEqual({ command: 'npm run dev', shell: 'bash' });
+  });
+
+  it('updateWebApp service 三态：object=设置（普通型→服务型互转）', async () => {
+    const created = await webAppService.createWebApp('https://example.com');
+    expect(created.service).toBeUndefined();
+
+    const serviced = await webAppService.updateWebApp(created.id, {
+      service: { command: 'npm start', shell: 'auto' },
+    });
+    expect(serviced.service).toEqual({ command: 'npm start', shell: 'auto' });
+  });
+
+  it('createWebApp shell 空兜底为 auto', async () => {
+    const state = await webAppService.createWebApp('http://localhost:3000', {
+      command: 'npm run dev',
+      shell: '',
+    });
+    expect(state.service).toEqual({ command: 'npm run dev', shell: 'auto' });
+  });
+
+  it('updateWebApp shell 空兜底为 auto', async () => {
+    const created = await webAppService.createWebApp('https://example.com');
+    const updated = await webAppService.updateWebApp(created.id, {
+      service: { command: 'npm start', shell: '   ' },
+    });
+    expect(updated.service).toEqual({ command: 'npm start', shell: 'auto' });
+  });
+
+  it('createWebApp service 存在但 command 空 → 拒绝', async () => {
+    await expect(
+      webAppService.createWebApp('http://localhost:3000', { command: '', shell: 'auto' }),
+    ).rejects.toThrow();
+  });
+
+  it('createWebApp service 存在但 url 空 → 拒绝', async () => {
+    await expect(
+      webAppService.createWebApp('', { command: 'npm run dev', shell: 'auto' }),
+    ).rejects.toThrow();
+  });
+
+  it('updateWebApp service command 空 → 拒绝', async () => {
+    const created = await webAppService.createWebApp('https://example.com');
+    await expect(
+      webAppService.updateWebApp(created.id, { service: { command: '', shell: 'auto' } }),
+    ).rejects.toThrow();
   });
 });

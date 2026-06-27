@@ -15,7 +15,21 @@
     "removeShortcut": "Remove Shortcut",
     "add": "Add",
     "emptyMessage": "No web apps. Click + to add one.",
-    "webCatalog": "Web Catalog"
+    "webCatalog": "Web Catalog",
+    "serviceToggle": "Launch local service (advanced)",
+    "serviceCommand": "Service command",
+    "serviceCommandPlaceholder": "e.g. npm run dev",
+    "serviceShellLabel": "Shell",
+    "serviceShell": {
+      "auto": "Auto detect",
+      "bash": "Git Bash",
+      "cmd": "Command Prompt (cmd)",
+      "powershell": "PowerShell",
+      "custom": "Custom"
+    },
+    "serviceShellCustomPath": "Custom shell path",
+    "serviceShellCustomPlaceholder": "e.g. C:\\Program Files\\Git\\bin\\bash.exe",
+    "serviceBadge": "Service app"
   },
   "titlebar": {
     "appName": "web-nest",
@@ -25,7 +39,13 @@
     "forward": "Forward",
     "refresh": "Refresh",
     "copyUrl": "Copy URL",
-    "devtools": "DevTools"
+    "devtools": "DevTools",
+    "serviceState": {
+      "starting": "Starting",
+      "running": "Running",
+      "failed": "Service failed",
+      "stopped": "Stopped"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -62,6 +82,8 @@
     "webAppNotFound": "Web app not found: {{id}}",
     "shortcutNotSupported": "Desktop shortcuts are only supported on Windows",
     "failedToOpenApp": "Failed to open app: {{id}}",
-    "shortcutDescription": "Open {{title}} in Web Nest"
+    "shortcutDescription": "Open {{title}} in Web Nest",
+    "serviceCommandRequired": "Service command is required",
+    "serviceUrlRequired": "Service web app requires a valid URL"
   }
 }

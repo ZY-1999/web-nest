@@ -1,11 +1,14 @@
 import fs from 'fs';
 import path from 'path';
+import type { AppServiceConfig } from '@/shared/services/webAppApi';
 
 export interface PersistedApp {
   id: string;
   url: string;
   title: string;
   faviconUrl: string;
+  /** 服务型 app 的本地服务配置；普通型/旧配置缺失为 undefined（向后兼容）。 */
+  service?: AppServiceConfig;
 }
 
 class AppConfigService {

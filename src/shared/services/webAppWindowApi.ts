@@ -1,4 +1,5 @@
 import { serviceRegistry } from '@/shared/serviceRegistry';
+import type { ServiceState } from './webAppApi';
 
 export interface NavigationState {
   appId?: string;
@@ -7,6 +8,9 @@ export interface NavigationState {
   faviconDataUrl?: string;
   canGoBack: boolean;
   canGoForward: boolean;
+  /** 服务型 app 状态（Spec 06；普通型 undefined → 标题栏不渲染指示器）。 */
+  serviceState?: ServiceState;
+  serviceError?: string;
 }
 
 export abstract class WebAppWindowApi {
