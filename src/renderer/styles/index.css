@@ -59,6 +59,14 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* native <select> 的 <option> 弹出列表是独立渲染层，不继承父容器背景——
+     dark 主题下默认走系统白底，而文字继承浅色 --text → 白底浅字看不见。
+     显式用 surface/text token，dark=深底浅字、light=白底深字。 */
+  select option {
+    background-color: var(--surface);
+    color: var(--text);
+  }
 }
 
 /* ─── Titlebar ──────────────────────────────────────────────────────────── */
