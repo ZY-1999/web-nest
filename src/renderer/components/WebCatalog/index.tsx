@@ -231,7 +231,7 @@ function AppCard({
         >
           <button
             onClick={() => { setMenuOpen(false); onEdit() }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
+            className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-1.5 text-sm text-foreground hover:bg-accent"
             data-testid="webapp-edit-btn"
           >
             <Pencil className="h-3.5 w-3.5" />
@@ -239,7 +239,7 @@ function AppCard({
           </button>
           <button
             onClick={handleToggleShortcut}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
+            className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-1.5 text-sm text-foreground hover:bg-accent"
             data-testid={shortcutExists ? 'webapp-remove-shortcut-btn' : 'webapp-shortcut-btn'}
           >
             {shortcutExists ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
@@ -247,7 +247,7 @@ function AppCard({
           </button>
           <button
             onClick={() => { setMenuOpen(false); onDelete() }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-red-500 hover:bg-accent"
+            className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-1.5 text-sm text-red-500 hover:bg-accent"
             data-testid="webapp-delete-btn"
           >
             <Trash2 className="h-3.5 w-3.5" />
