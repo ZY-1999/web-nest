@@ -10,6 +10,14 @@ export const test = base.extend<{
   electronApp: async ({}, use) => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'web-nest-e2e-'));
 
+    // Force English locale so text-assertion tests are deterministic regardless
+    // of the host system locale (i18nService priority: settings.json > system locale).
+    fs.writeFileSync(
+      path.join(tmpDir, 'settings.json'),
+      JSON.stringify({ locale: 'en' }),
+      'utf-8',
+    );
+
     const app = await electron.launch({
       args: ['./dist/main/index.js'],
       env: {
