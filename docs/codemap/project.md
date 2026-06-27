@@ -5,8 +5,9 @@
 
 ## 1. Orientation
 
-- Last updated: `2026-06-19`
+- Last updated: `2026-06-27`
 - Project: web-nest — 基于 Electron 的 Web 应用启动器（桌面产品）
+- Recent: 服务型 Web App 功能已交付（2026-06-27，8 spec 闭环）——这类 app 打开前 spawn 本地后端服务（command + shell），标题栏显示 starting/running/failed/stopped，关窗 kill 进程、退出扫杀全部服务。见 Capability「服务型 Web App」+ Cross-Module Flow「打开服务型 Web App」
 - Role / responsibility: 管理 Web 应用卡片，快速打开独立窗口（带自定义标题栏），持久化配置/favicon/session，统一主题/i18n/日志
 - Main languages / frameworks: TypeScript · React 18 + Zustand + Tailwind v4 + shadcn · Rust (@napi-rs native 模块，workspace 子包 `native`)
 - Runtime / deployment shape: Electron 34 桌面应用，electron-builder 打包（Windows NSIS 为主）；三进程 main / preload / renderer
@@ -51,6 +52,7 @@ Node: web-nest
 - Children:
   - **IPC 通信与 ServiceRegistry** — Main modules: [shared/serviceRegistry/](../../src/shared/serviceRegistry/), [shared/channel/](../../src/shared/channel/); Entry: `serviceRegistry.defineApi` / `implementService`; Status: confirmed; Feature CodeMap: pending（建议优先建）
   - **Web 应用管理（CRUD + 窗口/视图生命周期）** — Main: [main/services/webAppService.ts](../../src/main/services/webAppService.ts), [main/services/webAppWindowService.ts](../../src/main/services/webAppWindowService.ts); Entry: `webAppService.openWebApp`; Status: confirmed; Feature CodeMap: pending（建议优先建）
+  - **服务型 Web App（本地后端服务启动 + 进程清理）** — Main: [main/services/serviceAppLauncher.ts](../../src/main/services/serviceAppLauncher.ts), [main/services/shellDetector.ts](../../src/main/services/shellDetector.ts), [main/services/processManager.ts](../../src/main/services/processManager.ts); Entry: `launchServiceApp`（spawn command + URL 重试 + exit 边界状态机）/ `killAllServiceProcesses`（before-quit 兜底扫杀）；Status: confirmed（2026-06-27 交付，ADR-0006 用 child_process 非 execa）
   - **窗口管理（BaseWindow）** — Main: [main/windowManager/](../../src/main/windowManager/); Entry: `windowManager.createWindow/getWindow/destroyWindow`; Status: confirmed
   - **视图管理（WebContentsView）** — Main: [main/viewManager/](../../src/main/viewManager/); Entry: `viewManager.createView/destroyView/requestTo/broadcast`; Status: confirmed
   - **主题系统** — Main: [main/services/themeService.ts](../../src/main/services/themeService.ts), [shared/theme/](../../src/shared/theme/); Entry: `themeService` (主进程 SOT) + `themeApi`; Status: confirmed; Feature CodeMap: pending
@@ -68,7 +70,7 @@ Node: web-nest
 - Type: `module` · Status: `confirmed`
 - Purpose: 按"目录/包"路由，标注职责与依赖
 - Children:
-  - `src/main/services/` — 8 个 service：appConfig / favicon / i18n / mainWindow / settings / shortcut / theme / updater / webApp / webAppWindow。`registerMainServices()`（[index.ts](../../src/main/services/index.ts)）仅注册 5 个跨进程 IPC service：updater / webApp / theme / i18n / settings；其余为内部依赖或 per-view（webAppWindowService）。Key dep: serviceRegistry, channel, viewManager, windowManager
+  - `src/main/services/` — IPC service：appConfig / favicon / i18n / mainWindow / settings / shortcut / theme / updater / webApp / webAppWindow。`registerMainServices()`（[index.ts](../../src/main/services/index.ts)）仅注册 5 个跨进程 IPC service：updater / webApp / theme / i18n / settings；其余为内部依赖或 per-view（webAppWindowService）。**服务型 app 三个内部模块**（非 IPC service，被 webAppService 直接 import）：`shellDetector`（resolveShell：auto→git bash 注册表探测，全局缓存）、`processManager`（spawnService 经 shell + killTree `taskkill /T /F`，stderr 尾部截断）、`serviceAppLauncher`（launchServiceApp 协调器：URL 自适应重试 + exit 边界状态机）。Key dep: serviceRegistry, channel, viewManager, windowManager, child_process
   - `src/main/viewManager/` — `ManagedView`（[managedView.ts](../../src/main/viewManager/managedView.ts)）封装 WebContentsView + webContents 事件订阅（含 `did-fail-load`/`render-process-gone` 日志接线）+ `toggleDevTools()`。Risk: 销毁后访问原生对象抛异常（见 Risk Areas）
   - `src/main/windowManager/` — `ManagedWindow`（[managedWindow.ts](../../src/main/windowManager/managedWindow.ts)）封装 BaseWindow + `isClosing` 标志。macOS 关闭隐藏到托盘
   - `src/shared/serviceRegistry/` — `@Singleton() ServiceRegistry` + `defineApi`/`implementService` + `serviceMetadataRegistry`（靠 `static apiName` 路由，抗 minify）。[index.ts](../../src/shared/serviceRegistry/index.ts)
@@ -77,7 +79,7 @@ Node: web-nest
   - `src/shared/preload/args.ts` — `buildPreloadArgs`/`parsePreloadArgs` 对称 API，控制 preload 的 `channelExpose`/`channelTimeout`
   - `src/shared/theme/` · `src/shared/i18n/` — 主题预设/locale 资源（zh-CN + en）
   - `src/preload/index.ts` — 单文件安全边界：仅 `exposeInMainWorld('electronEnv', {platform})` + `channel.init(parsePreloadArgs)` + `logManager.initLog()`
-  - `src/renderer/` — React。入口 [main.tsx](../../src/renderer/main.tsx)（管理窗）/ [webapp-titlebar.tsx](../../src/renderer/webapp-titlebar.tsx)（Web App 标题栏）；stores: [webAppStore.ts](../../src/renderer/stores/webAppStore.ts) (Zustand) / [faviconStore.ts](../../src/renderer/stores/faviconStore.ts)
+  - `src/renderer/` — React。入口 [main.tsx](../../src/renderer/main.tsx)（管理窗）/ [webapp-titlebar.tsx](../../src/renderer/webapp-titlebar.tsx)（Web App 标题栏）；stores: [webAppStore.ts](../../src/renderer/stores/webAppStore.ts) (Zustand) / [faviconStore.ts](../../src/renderer/stores/faviconStore.ts)。**服务型 app UI**：[WebCatalog/index.tsx](../../src/renderer/components/WebCatalog/index.tsx) AddDialog/EditDialog 的 `ServiceConfigFields`（开关+command+shell 下拉）+ AppCard Terminal 角标；标题栏 `WebAppTitleBar/ServiceStateIndicator.tsx`（四态渲染）
   - `native/` (workspace 子包) — Rust @napi-rs 模块，`pnpm run build:native` 产物 `.node`（Status: inferred，边界未深入）
 - Next Drill-Down: 改某模块前先读其 service 抽象（shared/services）+ 实现（main/services）+ 对应测试
 
@@ -92,8 +94,8 @@ Node: web-nest
     - renderer: [src/renderer/main.tsx](../../src/renderer/main.tsx)、[src/renderer/webapp-titlebar.tsx](../../src/renderer/webapp-titlebar.tsx)
   - UI / routes: `App.tsx`（管理窗根，含 WebCatalog + SettingsDialog + TitleBar）；`WebAppTitleBar`（TitleRow + NavRow）
   - 服务注册（IPC 自动路由）: [registerMainServices](../../src/main/services/index.ts) 在 app ready、任何 window 创建之前调用（防首屏 locale/竞态）
-  - CLI / 启动参数: `--open-app=<appId>`（main/index.ts `parseOpenAppArg`，快捷方式模式直开 Web App 而不开管理窗）
-  - 事件 handlers: `app.on('second-instance')`（单实例二次启动分发 open-app）、`app.on('activate')`、各 `ManagedView` webContents 事件、`nativeWindow.on('close')`（置 `isClosing`）
+  - CLI / 启动参数: `--open-app=<appId>`（main/index.ts `parseOpenAppArg`，快捷方式模式直开 Web App 而不开管理窗；服务型 app 经同一 `openWebApp` 路径 spawn 服务）
+  - 事件 handlers: `app.on('second-instance')`（单实例二次启动分发 open-app）、`app.on('activate')`、`app.on('before-quit')`（兜底扫杀所有服务型 app 后台进程 → `killAllServiceProcesses`）、各 `ManagedView` webContents 事件、`nativeWindow.on('close')`（置 `isClosing`）、`nativeWindow.on('closed')`（服务型 app 在此 kill 单个服务进程）
 - Next Drill-Down: 改启动时序看 main/index.ts 的 5 phase 注释
 
 ### Node: Domain And Data
@@ -101,7 +103,9 @@ Node: web-nest
 - Type: `object` · Status: `confirmed`
 - Purpose: 核心数据对象与落点
 - Children:
-  - Web App 条目（appId/windowId 分离；持久化于 `~/.web-nest/apps.config`，JSON，经 `appConfigService`）
+  - Web App 条目（appId/windowId 分离；持久化于 `~/.web-nest/apps.config`，JSON，经 `appConfigService`）。**服务型 app** 多一层 `service: { command: string; shell: string }`（存在即服务型，无 `type` 字段；旧配置无此字段 → undefined → 普通型，零迁移）
+  - **serviceState 状态机**（服务型 app 运行时）：`idle | starting | running | failed | stopped`；以 content view `did-finish-load` 成功为 exit 边界——此前进程 exit=failed、此后 exit=stopped；经 NavigationState.serviceState 推标题栏 `ServiceStateIndicator`
+  - **后台服务进程树**：spawn 出的 shell 子进程树，win32 经 `taskkill /pid <pid> /T /F` 强杀；pid 在 `WebAppEntry.serviceProcess`
   - favicon 缓存：`~/.web-nest/.cache/`（`faviconService`，dataURL）
   - session：`~/.web-nest/.cache/sessions/`（`app.setPath('sessionData', …)`；`closeWebApp` 保留、`deleteWebApp` 用 `session.fromPartition().clearStorageData()` 清理）
   - 日志：`~/.web-nest/log/main.log`（`paths.getLogDir()`，受 `WEB_NEST_HOME` 控制；electron-log）
@@ -129,6 +133,7 @@ Node: web-nest
 - Purpose: 列主要跨模块链路（深层链路建 Feature CodeMap）
 - Major Flows:
   - **打开 Web App** — Modules: WebCatalog(renderer) → webAppApi → channel/preload → webAppService → windowManager.createWindow + viewManager.createView(标题栏 view + 内容 view 双 view) → WebAppWindowService per-view `implementService`；Effect: 独立窗口 + 双行标题栏；Drill-Down: pending feature map
+  - **打开服务型 Web App（service 存在时）** — Modules: webAppService.createWindowForApp → serviceAppLauncher.launchServiceApp（resolveShell → processManager.spawnService → 状态机）→ URL 自适应重试（did-fail-load 500ms→2s 指数退避，30s 总超时）→ did-finish-load 标 running 边界 → onStateChange 经 `windowService.updateServiceState` + `viewManager.requestTo('url-changed')` 推标题栏 ServiceStateIndicator；**清理双保险**：关窗 → nativeWindow 'closed' → killServiceProcess（taskkill /T /F）；app 退出 → before-quit → killAllServiceProcesses 扫杀全部。ADR-0006 用 child_process 非 execa。Drill-Down: spec `.scratch/2026-06-27-app-command-service/specs/04` + `05`
   - **IPC 请求路由（任意 api.method）** — Modules: renderer API 抽象 → channel.requestTo → preload bridge → main `registerChannelHandlers`(`serviceName:methodName`) → service impl；Effect: 类型安全跨进程调用；Drill-Down: 见 Capability「IPC 通信」
   - **主题切换** — Modules: ThemeToggle(renderer) → themeApi.setTheme → themeService(主进程 SOT 持久化) → viewManager.broadcast → renderer `applyThemeToRoot`；Effect: 全局换肤（防 FOUC 四层）；Drill-Down: pending
   - **持久化读写** — Modules: webAppService → appConfigService → `~/.web-nest/apps.config`；Effect: 重启后 Web App 列表恢复
@@ -140,13 +145,13 @@ Node: web-nest
 - Type: `validation` · Status: `confirmed`
 - Purpose: 如何证明行为正确
 - Validation Entry:
-  - Test commands: `pnpm run typecheck` · `pnpm run lint` · `pnpm run test` (Vitest, ~156) · `pnpm run test:e2e` (Playwright, ~19) · `pnpm run build` · `pnpm run check` (lint+typecheck+test+build)
+  - Test commands: `pnpm run typecheck` · `pnpm run lint` · `pnpm run test` (Vitest, ~212) · `pnpm run test:e2e` (Playwright, ~40) · `pnpm run build` · `pnpm run check` (lint+typecheck+test+build)
   - Test directories: [src/__tests__/](../../src/__tests__/)（main/preload/renderer/shared/integration 五区）、[tests/e2e/](../../tests/e2e/)
   - Vitest projects: `main`(node) / `preload`(jsdom) / `renderer`(jsdom)，setup 在 `src/__tests__/infrastructure/`
-  - Smoke paths: E2E [tests/e2e/webCatalog.spec.ts](../../tests/e2e/webCatalog.spec.ts) / [webAppTitlebar.spec.ts](../../tests/e2e/webAppTitlebar.spec.ts) / [theme.spec.ts](../../tests/e2e/theme.spec.ts) / [settings.spec.ts](../../tests/e2e/settings.spec.ts) / [app.spec.ts](../../tests/e2e/app.spec.ts)
+  - Smoke paths: E2E [tests/e2e/webCatalog.spec.ts](../../tests/e2e/webCatalog.spec.ts) / [webAppTitlebar.spec.ts](../../tests/e2e/webAppTitlebar.spec.ts) / [serviceWebApp.spec.ts](../../tests/e2e/serviceWebApp.spec.ts)（服务型 app 全生命周期 + 进程 kill 断言）/ [theme.spec.ts](../../tests/e2e/theme.spec.ts) / [settings.spec.ts](../../tests/e2e/settings.spec.ts) / [app.spec.ts](../../tests/e2e/app.spec.ts)；**E2E fixture 预置 `settings.json` 强制英文 locale**（[electronApp.ts](../../tests/e2e/fixtures/electronApp.ts)），否则中文系统下文本断言失败
   - Logs: `~/.web-nest/log/main.log`
   - Known CI checks: `.github/workflows/ci.yml` — check(ubuntu: lint+typecheck+unit) / build(win/mac/ubuntu) / e2e(win)
-- proves: 单元行为、IPC 契约、E2E 标题栏/导航/主题
+- proves: 单元行为、IPC 契约、E2E 标题栏/导航/主题、服务型 app 全生命周期（spawn→running→关窗 kill→quit 扫杀→外部 kill stopped）
 - does not prove: 生产签名/更新真实链路、native 模块跨平台行为
 - Next Drill-Down: 改某 service 先读其同名测试（行为即规格）
 
@@ -160,6 +165,7 @@ Node: web-nest
   - **minify 混淆 `Function.name`** — Source: 生产构建；缓解: API 抽象类声明 `static apiName`（勿依赖 constructor.name）；Suggested Feature CodeMap: ipc-and-serviceregistry
   - **fill→click 时序 flaky** — Source: Playwright `fill()` 后 React 状态未同步；缓解: submit 点击前加 `toBeEnabled()` 断言
   - **外部 URL 白屏无可观测** — Source: 第三方页面加载失败/崩溃；现状: 仅记日志 + DevTools 按钮，无恢复 UI（显式 Out-of-Scope）
+  - **服务型 app stale-entry 进程泄漏竞态** — Source: 窗口在 `createWindowForApp` 期间关闭（entry 尚未 `apps.set`）→ 'closed' handler 找不到 entry 跳过 kill → entry 随后注册带存活 serviceProcess → 下次 openWebApp 走 stale 分支；缓解: `_doOpenWebApp` stale 分支已加 `killServiceProcess(existing)` 兜底 + before-quit 终极扫杀；Affected: 服务型 app 进程清理
 - Next Drill-Down: 动原生资源生命周期前读 AGENTS.md 销毁约定 + managedView/managedWindow
 
 ### Node: Feature CodeMap Backlog
@@ -168,7 +174,7 @@ Node: web-nest
 - Purpose: 建议后续建的深度 Feature CodeMap（按优先级）
 - Backlog:
   - **ipc-and-serviceregistry** — Why: 项目通信地基，所有 service 共用；Likely entry: [serviceRegistry/index.ts](../../src/shared/serviceRegistry/index.ts) `implementService` → `registerChannelHandlers`；Likely files: shared/channel/, shared/services/, main/services/index.ts；Priority: high
-  - **webapp-lifecycle** — Why: CRUD + 双 view 窗口 + session + 销毁，链路长且踩坑多；Likely entry: `webAppService.openWebApp/closeWebApp/deleteWebApp/destroyEntry`；Likely files: webAppService.ts, webAppWindowService.ts, windowManager/, viewManager/；Priority: high
+  - **webapp-lifecycle** — Why: CRUD + 双 view 窗口 + session + 销毁 + 服务型 spawn/进程清理，链路长且踩坑多；Likely entry: `webAppService.openWebApp/closeWebApp/deleteWebApp/destroyEntry`（服务型分支调 serviceAppLauncher）；Likely files: webAppService.ts, webAppWindowService.ts, serviceAppLauncher.ts, shellDetector.ts, processManager.ts, windowManager/, viewManager/；Priority: high（服务型 app 8 spec 已闭环于 `.scratch/2026-06-27-app-command-service/`，可作此 map 的素材）
   - **webapp-titlebar** — Why: 双行标题栏 + 双 view + per-view service + 导航；Likely entry: [shared/titlebar.ts](../../src/shared/titlebar.ts), [WebAppTitleBar/](../../src/renderer/components/WebAppTitleBar/)；Priority: medium
   - **theme-system** — Why: 三层映射 + 防 FOUC 四层；Likely entry: themeService + shared/theme/；Priority: medium
   - **observability** — Why: 日志迁移 + DevTools 按钮 + 加载/崩溃事件（spec 已闭环，可存档为 map）；Priority: low
@@ -183,6 +189,7 @@ Node: web-nest
 | ---------- | ------------ | ----- | --------------- | ------ |
 | IPC/ServiceRegistry | shared/serviceRegistry, shared/channel | `defineApi`/`implementService` | pending | confirmed |
 | Web App 管理 | main/services/webAppService, webAppWindowService | `webAppService.openWebApp` | pending | confirmed |
+| 服务型 Web App | serviceAppLauncher, shellDetector, processManager | `launchServiceApp`/`killAllServiceProcesses` | (spec 已闭环) | confirmed |
 | 窗口管理 | main/windowManager | `windowManager.createWindow` | — | confirmed |
 | 视图管理 | main/viewManager | `viewManager.createView` | — | confirmed |
 | 主题 | main/services/themeService, shared/theme | `themeService`+`themeApi` | pending | confirmed |
