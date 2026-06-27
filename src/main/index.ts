@@ -34,8 +34,14 @@ function main(): void {
   // ── Phase 1: Pre-app-ready 基础设施 ──────────────────────────────────
   app.setPath('sessionData', paths.getSessionDir());
 
+  // ── Phase 2: 配置加载(先于日志,以便 debugMode 决定日志级别与文件)──
+  settingsService.init();
+  const { debugMode, disableGpu } = settingsService.getSettingsSync();
+
   logManager.initLog({
-    level: app.isPackaged ? 'info' : 'debug',
+    level: debugMode ? 'silly' : app.isPackaged ? 'info' : 'debug',
+    logDir: paths.getLogDir(),
+    fileName: debugMode ? 'debug.log' : 'main.log',
     maxSize: 5 * 1024 * 1024,
     format: ({ ctx, params, level, timestamp }) => {
       const time = timestamp.toISOString();
@@ -47,10 +53,7 @@ function main(): void {
     },
   });
 
-  // ── Phase 2: 配置加载 + 启动前 flags ─────────────────────────────────
-  settingsService.init();
-
-  if (settingsService.getSettingsSync().disableGpu) {
+  if (disableGpu) {
     app.commandLine.appendSwitch('disable-gpu');
     app.commandLine.appendSwitch('disable-software-rasterizer');
     log.info('GPU hardware acceleration disabled by settings');

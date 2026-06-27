@@ -16,6 +16,7 @@ export interface LogConfig {
   level?: LogLevel;
   maxSize?: number;
   logDir?: string;
+  fileName?: string;
   resolveLogPath?: (message: MessageInfo) => string;
   format?: (info: MessageInfo) => string;
 }
@@ -81,9 +82,10 @@ export const logManager = {
         mainLog.transports.file.maxSize = config.maxSize;
       }
 
-      if (config?.resolveLogPath || config?.logDir) {
+      if (config?.resolveLogPath || config?.logDir || config?.fileName) {
         const userResolveLogPath = config.resolveLogPath;
         const logDir = config.logDir;
+        const fileName = config.fileName;
         mainLog.transports.file.resolvePathFn = (
           variables: PathVariables,
           message?: ElectronLogMessage,
@@ -100,7 +102,7 @@ export const logManager = {
           return path.join(
             logDir ?? variables.libraryDefaultDir,
             subDir,
-            variables.fileName ?? 'main.log',
+            fileName ?? variables.fileName ?? 'main.log',
           );
         };
       }

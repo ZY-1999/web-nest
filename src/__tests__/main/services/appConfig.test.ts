@@ -23,6 +23,12 @@ describe('paths', () => {
     const dir = paths.getCacheDir();
     expect(dir).toBe(path.join('/fake/path/home', '.web-nest', '.cache'));
   });
+
+  it('getLogDir should return ~/.web-nest/log', async () => {
+    const { paths } = await import('@/main/utils/paths');
+    const dir = paths.getLogDir();
+    expect(dir).toBe(path.join('/fake/path/home', '.web-nest', 'log'));
+  });
 });
 
 describe('appConfigService', () => {

@@ -47,6 +47,7 @@
     "testConnectionFail": "连接失败：{{error}}",
     "testConnectionTesting": "正在测试...",
     "advanced": "高级",
+    "debugMode": "调试模式",
     "userAgent": "自定义 User-Agent",
     "userAgentPlaceholder": "留空使用默认值",
     "save": "保存",

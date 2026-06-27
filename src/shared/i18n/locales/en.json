@@ -47,6 +47,7 @@
     "testConnectionFail": "Connection failed: {{error}}",
     "testConnectionTesting": "Testing...",
     "advanced": "Advanced",
+    "debugMode": "Debug mode",
     "userAgent": "Custom User-Agent",
     "userAgentPlaceholder": "Leave empty for default",
     "save": "Save",

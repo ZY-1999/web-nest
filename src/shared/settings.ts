@@ -8,6 +8,8 @@ export interface AppSettings {
   autoLaunch: boolean;
   /** Disable GPU hardware acceleration (requires restart) */
   disableGpu: boolean;
+  /** Enable debug mode: log all levels to a separate debug.log (requires restart) */
+  debugMode: boolean;
   /** Proxy type */
   proxyMode: 'none' | 'http' | 'socks5';
   /** Proxy server hostname */
@@ -27,6 +29,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   locale: '',
   autoLaunch: false,
   disableGpu: false,
+  debugMode: false,
   proxyMode: 'none',
   proxyHost: '',
   proxyPort: 0,

@@ -21,6 +21,11 @@ export const paths = {
     fs.mkdirSync(dir, { recursive: true });
     return dir;
   },
+  getLogDir(): string {
+    const dir = path.join(this.getWebNestBaseDir(), 'log');
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  },
 
   getPreloadPath() {
     return path.join(__dirname, '../preload/index.js');

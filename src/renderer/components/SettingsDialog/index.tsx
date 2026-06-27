@@ -82,6 +82,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
   const showProxyFields = draft.proxyMode !== 'none';
   const gpuChanged = draft.disableGpu !== settings?.disableGpu;
+  const debugChanged = draft.debugMode !== settings?.debugMode;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -215,16 +216,36 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           {/* ── Advanced ─────────────────────────────── */}
           <section>
             <h3 className="mb-3 text-sm font-semibold text-foreground">{t('settings.advanced')}</h3>
-            <div>
-              <label className="mb-1 block text-sm">{t('settings.userAgent')}</label>
-              <input
-                type="text"
-                value={draft.userAgent}
-                onChange={(e) => updateDraft('userAgent', e.target.value)}
-                placeholder={t('settings.userAgentPlaceholder')}
-                data-testid="settings-useragent"
-                className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              />
+            <div className="space-y-3">
+              <div>
+                <label className="flex items-center justify-between">
+                  <span className="text-sm">{t('settings.debugMode')}</span>
+                  <input
+                    type="checkbox"
+                    checked={draft.debugMode}
+                    onChange={(e) => updateDraft('debugMode', e.target.checked)}
+                    data-testid="settings-debugMode-checkbox"
+                    className="h-4 w-4 accent-primary"
+                  />
+                </label>
+                {debugChanged && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t('settings.restartRequired')}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm">{t('settings.userAgent')}</label>
+                <input
+                  type="text"
+                  value={draft.userAgent}
+                  onChange={(e) => updateDraft('userAgent', e.target.value)}
+                  placeholder={t('settings.userAgentPlaceholder')}
+                  data-testid="settings-useragent"
+                  className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
             </div>
           </section>
         </div>
