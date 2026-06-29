@@ -208,8 +208,12 @@ Issues 以本地 markdown 形式存放在仓库根的 `.scratch/`（一个 featu
 
 ### Domain docs
 
-Single-context 布局：根目录 `CONTEXT.md` + `docs/adr/`（尚未创建，由 `/domain-modeling` 按需生成）。详见 `docs/agents/domain.md`。
+Single-context 布局：根目录 `CONTEXT.md` + `docs/adr/`（已建立，按需新增）。详见 `docs/agents/domain.md`。
 
 ### CodeMap
 
 项目级代码地形索引在 `docs/codemap/`（项目 map 一次生成；feature map 用 `/codemap` 按需补充或刷新；不确定 map 是否仍准确时跑 `/codemap` drift-check，报告 drift 则更新对应 map）。
+
+### Git contract
+
+当前分支策略为 **solo**（直接在当前分支开发，不开 feature 分支）；提交信息遵循 **Conventional Commits**（`feat`/`fix`/`docs`/`test`/`refactor`/`perf` 等，可选 scope，无 sign-off / issue key）。`/sdd-flow` 和 `/tdd` 据此决定提交与分支。详见 `docs/agents/git-contract.md`。

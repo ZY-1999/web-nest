@@ -8,14 +8,14 @@ SDD skills 探索代码库时应如何消费本仓库的领域文档。
 - 根目录 **`CONTEXT-MAP.md`**（若存在，指向每个 context 的 `CONTEXT.md`，按主题读相关的那份）
 - **`docs/adr/`** —— 读涉及你即将改动区域的 ADR。多 context 仓库还要看 `src/<context>/docs/adr/`
 
-这些文件目前本仓库都还没有。若不存在，**静默继续**：不要标记缺失、不要建议先建。`/domain-modeling` skill（经 `/grill-with-docs`、`/improve-codebase-architecture` 触达）会在术语或决策真正确定时懒创建它们。本项目的长期规则、踩坑记录现沉淀在 `AGENTS.md`。
+本仓库已建立根目录 `CONTEXT.md`（web-nest 领域语言）与 `docs/adr/`（ADR-0001 起）。涉及新术语或新决策时，`/domain-modeling` skill（经 `/grill-with-docs`、`/improve-codebase-architecture` 触达）会按需增补。尚未覆盖的主题**静默继续**即可——不要标注缺失、不要建议先建。本项目的长期规则、踩坑记录沉淀在 `AGENTS.md`。
 
 ## 文件结构（Single-context）
 
 ```
 /
-├── CONTEXT.md        ← 待创建（按需）
-├── docs/adr/         ← 待创建（按需）
+├── CONTEXT.md        ← 已建立（web-nest 领域语言）
+├── docs/adr/         ← 已建立（ADR-0001..0006）
 └── src/
 ```
 
